@@ -1,0 +1,26 @@
+BEST_FIT	kv.h	34
+BLOCKSIZE	put.c	40
+FIRST_FIT	kv.h	34
+KV	kv.h	10
+Mdel	del.c	/^int main (int argc, char *argv [])$/
+Mget	get.c	/^int main (int argc, char *argv [])$/
+Mput	put.c	/^int main (int argc, char *argv [])$/
+WORST_FIT	kv.h	34
+alloc_t	kv.h	34
+allocation	put.c	/^alloc_t allocation (const char *alloc)$/
+help_string	del.c	18
+help_string	get.c	17
+help_string	put.c	18
+kv_datum	kv.h	22
+kv_datum	kv.h	28
+len	kv.h	25
+len_t	kv.h	16
+lire_val	put.c	/^void lire_val (kv_datum *val)$/
+print_all	get.c	/^void print_all (KV *kv, int quiet)$/
+print_one	get.c	/^void print_one (kv_datum *key, kv_datum *val)$/
+ptr	kv.h	24
+raler	common.c	/^void raler (KV *kv, const char *msg)$/
+usage	common.c	/^void usage (const char *argv0, int exitcode)$/
+usage_string	del.c	16
+usage_string	get.c	15
+usage_string	put.c	16
