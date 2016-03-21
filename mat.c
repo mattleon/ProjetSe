@@ -11,6 +11,11 @@
 #include <unistd.h>
 #define TAILLE_MIN 32
 #define TAILLE_MAX 2048
+#define head_h 2
+#define head_blk 1
+#define head_kv 1
+#define head_dkv 1
+
 
 typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
 
@@ -62,7 +67,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		snprintf(file,PATH_MAX,"%s/%s",dbname,extend);
 		fd1 = open(file,O_RDONLY | O_CREAT);
 		new->fd_blk = fd1;
-		write(fd1,"1\n",1);
+		write(fd1,"1\n",1); //Ne peut pas écrire, à modifier !
 
 		extend = ".dkv";
 		snprintf(file,PATH_MAX,"%s/%s",dbname,extend);
@@ -108,7 +113,6 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		fd4 = open(file,O_RDWR | O_CREAT);
 		new->fd_h = fd4;
 		write(fd1,"4\n",1);
-
 	}
 
 	if ( (strcmp(mode,"w"))==0 ) {
@@ -135,7 +139,6 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		fd4 = open(file,O_TRUNC | O_WRONLY | O_CREAT);
 		new->fd_h = fd4;
 		write(fd1,"4\n",1);
-
 	}
 
 
@@ -185,35 +188,41 @@ int kv_get (KV *kv, const kv_datum *key, kv_datum *val) {
 	if (val==NULL)
 		val = malloc(sizeof(kv_datum));
 
-		
+
 
 
 
 	return 0;
 }
 
-
+/*
 int kv_put (KV *kv, const kv_datum *key, const kv_datum *val) {
 
 	return 0;
 }
+*/
 
+void kv_start (KV *kv) {
+	lseek(kv->fd_blk,head_blk,SEEK_SET);
+	lseek(kv->fd_h,head_h,SEEK_SET);
+	lseek(kv->fd_kv,head_kv,SEEK_SET);
+	lseek(kv->fd_dkv,head_dkv,SEEK_SET);
+}
 
+/*
 int kv_del (KV *kv, const kv_datum *key) {
 
 	return 0;
 }
+*/
 
 
-void kv_start (KV *kv) {
 
-}
-
-
+/*
 int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 	return 0;
 }
-
+*/
 int main(int argc, char const *argv[]) {
 	return 0;
 }
