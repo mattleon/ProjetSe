@@ -9,10 +9,12 @@
 #include <linux/limits.h>
 #include <string.h>
 #include <unistd.h>
+
 #define TAILLE_MIN 32
 #define TAILLE_MAX 2048
 
 typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
+
 
 typedef struct KV {
 	int fd_h;
@@ -40,15 +42,12 @@ struct kv_datum
 
 typedef struct kv_datum kv_datum ;
 
+
+
+
 /*
  * Les différents types d'allocation
  */
-
-
-
-
-
-
 
 KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 	KV *new = malloc(sizeof(KV));
@@ -185,7 +184,7 @@ int kv_get (KV *kv, const kv_datum *key, kv_datum *val) {
 	if (val==NULL)
 		val = malloc(sizeof(kv_datum));
 
-		
+
 
 
 

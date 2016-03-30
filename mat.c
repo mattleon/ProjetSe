@@ -11,10 +11,10 @@
 #include <unistd.h>
 #define TAILLE_MIN 32
 #define TAILLE_MAX 2048
-#define head_h 2
-#define head_blk 1
-#define head_kv 1
-#define head_dkv 1
+#define head_h 2*sizeof(int)
+#define head_blk sizeof(int)
+#define head_kv sizeof(int)
+#define head_dkv sizeof(int)
 
 
 typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
@@ -48,9 +48,6 @@ typedef struct kv_datum kv_datum ;
 /*
  * Les différents types d'allocation
  */
-
-
-
 
 
 
@@ -184,13 +181,40 @@ int kv_close (KV *kv) {
 }
 
 
+
 int kv_get (KV *kv, const kv_datum *key, kv_datum *val) {
 	if (val==NULL)
 		val = malloc(sizeof(kv_datum));
 
+	lseek(kv->fd_kv,head_kv,SEEK_SET);
+	lseek(kv->fd_dkv,head_dkv,SEEK_SET);
+	int offset, lg1;
 
+	int n;
+	char *buf = malloc(TAILLE_MIN);
 
+	while( (n=read(kv->fd_dkv,buf,sizeof(int)))>0) {
+		if ( strcmp(buf,"1")==0) {
+			n=read(kv->fd_dkv,buf,sizeof(int));
+			n=read(kv->fd_dkv,buf,8);
+			offset = atoi(buf);
+			lseek(kv->fd_kv,offset,SEEK_SET);
+			n=read(kv->fd_dkv,buf,sizeof(int));
+			lg1 = atoi(buf);
+			n=read(kv->fd_dkv,buf,lg1);
 
+			if (strcmp(buf,key->ptr)==0) {
+				n=read(kv->fd_dkv,buf,sizeof(int));
+				lg1 = atoi(buf);
+				n=read(kv->fd_dkv,buf,lg1);
+				val->ptr = buf;
+				return 1;
+			}
+			else {
+				n=read(kv->fd_dkv,buf,sizeof(int) + 8);
+			}
+		}
+	}
 
 	return 0;
 }
