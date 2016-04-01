@@ -13,6 +13,7 @@ typedef struct KV {
 	int fd_blk;
 	int fd_dkv;
 	alloc_t alloc;
+	int hash;
 } KV ;
 
 /*

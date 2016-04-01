@@ -16,8 +16,13 @@
 #define head_kv sizeof(int)
 #define head_dkv sizeof(int)
 
+/*
+ * fichier .blk
+ * en-tête contient l'offset de la suite du bloc + taille restante
+ */
 
 typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
+
 
 typedef struct KV {
 	int fd_h;
@@ -25,6 +30,7 @@ typedef struct KV {
 	int fd_blk;
 	int fd_dkv;
 	alloc_t alloc;
+	int hash;
 } KV ;
 
 /*
@@ -55,6 +61,7 @@ typedef struct kv_datum kv_datum ;
 KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 	KV *new = malloc(sizeof(KV));
 	new->alloc = alloc;
+	new->hash = hidx;
 	char *extend = malloc(TAILLE_MIN);
 	char *file = malloc(TAILLE_MIN);
 	int fd1, fd2, fd3, fd4;
@@ -145,8 +152,8 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		fd1 = open(file,O_RDWR | O_TRUNC | O_CREAT);
 		new->fd_blk = fd1;
 		write(fd1,"1\n",1);
-
 		extend = ".dkv";
+
 		snprintf(file,PATH_MAX,"%s/%s",dbname,extend);
 		fd2 = open(file,O_RDWR | O_TRUNC | O_CREAT);
 		new->fd_dkv = fd2;
@@ -183,39 +190,90 @@ int kv_close (KV *kv) {
 
 
 int kv_get (KV *kv, const kv_datum *key, kv_datum *val) {
-	if (val==NULL)
-		val = malloc(sizeof(kv_datum));
 
+	void *value;
 	lseek(kv->fd_kv,head_kv,SEEK_SET);
 	lseek(kv->fd_dkv,head_dkv,SEEK_SET);
 	int offset, lg1;
-
-	int n;
+	int validate = 0;
+	int n,i;
 	char *buf = malloc(TAILLE_MIN);
 
-	while( (n=read(kv->fd_dkv,buf,sizeof(int)))>0) {
-		if ( strcmp(buf,"1")==0) {
-			n=read(kv->fd_dkv,buf,sizeof(int));
-			n=read(kv->fd_dkv,buf,8);
-			offset = atoi(buf);
-			lseek(kv->fd_kv,offset,SEEK_SET);
-			n=read(kv->fd_dkv,buf,sizeof(int));
-			lg1 = atoi(buf);
-			n=read(kv->fd_dkv,buf,lg1);
+	int tmp;
+	switch(kv->hash) {
+		case 0: tmp = hash_0(key->ptr);
+									break;
 
-			if (strcmp(buf,key->ptr)==0) {
+		case 1: tmp = hash_1(key->ptr);
+									break;
+
+		case 2: tmp = hash_2(key->ptr);
+									break;
+
+		default: return -1;
+	}
+
+	lseek(kv->fd_h,tmp,SEEK_SET);
+	n=read(kv->fd_h,buf,sizeof(int));
+	lseek(kv->fd_blk,atoi(buf),SEEK_SET);
+	n=read(kv->fd_blk,buf,sizeof(int)); //Adresse du prochain bloc (0 si pas de prochains bloc)
+	if ( atoi(buf)!=0 ) {     /* A CHANGER POUR TOUS LES BLOCS !!! */
+		n=read(kv->fd_blk,buf,sizeof(int)); // taille en nbr d'int du bloc
+		for ( i = 0; i < atoi(buf); i++) { // 1022 int max!
+			n=read(kv->fd_blk,buf,sizeof(int));
+			lseek(kv->fd_kv,atoi(buf),SEEK_SET);
+			n=read(kv->fd_blk,buf,sizeof(int));
+			int tmp = atoi(buf);
+			n=read(kv->fd_blk,buf,tmp);
+			if (strcmp(buf,(char *)key->ptr)==0) {
+				validate = 1;
+				n=read(kv->fd_blk,buf,sizeof(int));
+				int tmp = atoi(buf);
+				n=read(kv->fd_blk,buf,tmp);
+				value = (char *)buf;
+			}
+		}
+
+	}
+
+	if ( validate==1 ) {
+		while( (n=read(kv->fd_dkv,buf,sizeof(int)))>0) {
+			if ( strcmp(buf,"1")==0) {
+				n=read(kv->fd_dkv,buf,sizeof(int));
+				n=read(kv->fd_dkv,buf,8);
+				offset = atoi(buf);
+				lseek(kv->fd_kv,offset,SEEK_SET);
 				n=read(kv->fd_dkv,buf,sizeof(int));
 				lg1 = atoi(buf);
 				n=read(kv->fd_dkv,buf,lg1);
-				val->ptr = buf;
-				return 1;
-			}
-			else {
-				n=read(kv->fd_dkv,buf,sizeof(int) + 8);
+
+				if (strcmp(buf,(char *)key->ptr)==0) {
+					n=read(kv->fd_dkv,buf,sizeof(int));
+					lg1 = atoi(buf);
+					n=read(kv->fd_dkv,buf,lg1);
+					if ( strcmp(value,buf)==0 ) {
+						if (val==NULL) {
+							val=malloc(sizeof(kv_datum));
+							val->ptr = (void *)value;
+							val->len = sizeof(val->ptr);
+							free(buf);
+							return 1;
+						}
+						else {
+							val->ptr = (void *)buf;
+							val->ptr = realloc(val->ptr,val->len);
+							free(buf);
+							return 1;
+						}
+					}
+				}
+				else {
+					n=read(kv->fd_dkv,buf,sizeof(int) + 8);
+				}
 			}
 		}
 	}
-
+	free(buf);
 	return 0;
 }
 
@@ -247,6 +305,6 @@ int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 	return 0;
 }
 */
-int main(int argc, char const *argv[]) {
+int main() {
 	return 0;
 }
