@@ -16,6 +16,13 @@ typedef struct KV {
 	int hash;
 } KV ;
 
+typedef struct BLK {
+	int numBlk; //Numéro du bloc
+	int nbrEnt; //Max 1020
+	int numExBlk; //Existence d'un bloc suivant ou non (0 si n'existe pas)
+	int nextBlk; //Num du prochain bloc (0 si n'existe pas)
+} BLK;
+
 /*
  * Avec des longueurs sur 32 bits, on peut aller jusqu'à 4 Go
  */

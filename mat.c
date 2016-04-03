@@ -9,6 +9,7 @@
 #include <linux/limits.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #define TAILLE_MIN 32
 #define TAILLE_MAX 2048
 #define head_h 2
@@ -291,7 +292,7 @@ int kv_get (KV *kv, const kv_datum *key, kv_datum *val) {
 		default: return -1;
 	}
 
-	lseek(kv->fd_h,tmp,SEEK_SET);
+	lseek(kv->fd_h,head_h+tmp,SEEK_SET);
 	n=read(kv->fd_h,buf,sizeof(int));
 	lseek(kv->fd_blk,atoi(buf),SEEK_SET);
 	n=read(kv->fd_blk,buf,sizeof(int)); //numéro du prochain bloc (0 si pas de prochains bloc)
@@ -369,44 +370,228 @@ void kv_start (KV *kv) {
 	lseek(kv->fd_dkv,head_dkv,SEEK_SET);
 }
 
+typedef struct BLK {
+	int numBlk;
+	int nbrEnt; //Max 1020
+	int numExBlk;
+	int nextBlk;
+} BLK;
+
+/* On suppose que le pointeur est situé juste avant le 0
+ * dans le descripteur que l'on vient de libérer
+ */
+ /*
+void fusionne_cel(KV *kv) {
+	int lg,lg1,val=0,finLg;
+	char *buffer = malloc(sizeof(len_t));
+	n=read(kv->fd_dkv,buffer,1);
+	n=read(kv->fd_dkv,buffer,sizeof(int));
+	lg=atoi(buffer);
+	lseek(kv->fd_dkv,-1-sizeof(int)-sizeof(len_t),SEEK_CUR);
+	n=read(kv->fd_dkv,buffer,1);
+	if (strcmp(buffer,"0")==0) {
+		val++;
+		n=read(kv->fd_dkv,buffer,sizeof(int));
+		lg1=atoi(buffer);
+		lseek(kv->fd_dkv,-sizeof(int),SEEK_CUR);
+		sprintf(buffer,"%d",lg+lg1);
+		write(kv->fd_dkv,buffer,sizeof(int));
+		lseek(kv->fd_dkv,sizeof(len_t)+1,SEEK_CUR);
+	}
+	switch(val) {
+		case 0: n=read(kv->fd_dkv,buffer,sizeof(int));
+						lg = atoi(buffer);
+						lseek(kv->fd_dkv,sizeof(len_t)+1,SEEK_CUR);
+						n=read(kv->fd_dkv,buffer,sizeof(int));
+						if (strcmp(buffer,"0")==0) {
+
+						}
+		case 1:
+
+		default: break;
+	}
+}
+*/
+
+/* Fonction intermédiaire qui s'occupe de vérifier si une clé est dans un bloc
+ * Si la clé est dans le bloc, elle l'efface, sinon renvoie -1
+ * blk contient l'en-tête du bloc
+ */
+int del(KV *kv, BLK *blk,const kv_datum *key) {
+	int n,i;
+	char *bufNum = malloc(sizeof(int));
+	char *buffer = malloc(TAILLE_MAX);
+
+	lseek(kv->fd_blk,head_blk+blk->numExBlk*4096,SEEK_SET);
+	n=read(kv->fd_h,bufNum,sizeof(int)); //On lit le num du bloc
+	blk->numBlk = atoi(bufNum);
+	n=read(kv->fd_h,bufNum,sizeof(int)); //nbr d'entrée
+	blk->nbrEnt = atoi(bufNum);
+	n=read(kv->fd_h,bufNum,sizeof(int)); //existence bloc suivant
+	blk->numExBlk = atoi(bufNum);
+	n=read(kv->fd_h,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+	blk->nextBlk = atoi(bufNum);
+
+	for(i=0;i<blk->nbrEnt;i++) {
+		n=read(kv->fd_h,bufNum,sizeof(len_t));
+		if (strcmp(bufNum, (char *)key->ptr)==0) {
+			while ( (n=read(kv->fd_dkv,buffer,1)>0) ) {
+				if (strcmp(buffer,"1")) {
+					read(kv->fd_dkv,buffer,sizeof(int));
+					read(kv->fd_dkv,buffer,sizeof(len_t));
+					if (strcmp(buffer,bufNum)==0) {
+						lseek(kv->fd_dkv,-sizeof(len_t)-sizeof(int)-1,SEEK_CUR);
+						char *temp = malloc(1);
+						temp = "0";
+						write(kv->fd_dkv,temp,1); //Changement du int d'existence
+						lseek(kv->fd_blk,head_blk+blk->numExBlk*4096+sizeof(int),SEEK_SET);
+						read(kv->fd_blk,buffer,sizeof(int));
+						int nbrEntr = atoi(buffer);
+						char *newEnt = malloc(sizeof(int));
+						sprintf(newEnt,"%d",nbrEntr);
+						lseek(kv->fd_blk,-1,SEEK_CUR);
+						write(kv->fd_dkv,newEnt,sizeof(int)); //Changement du nbr d'entrée
+						free(buffer);
+						free(bufNum);
+						return 1;
+					}
+				}
+			}
+		}
+	}
+	return 0;
+}
 
 int kv_del (KV *kv, const kv_datum *key) {
+	len_t tmp;
+	int n,i;
+	char *bufNum = malloc(sizeof(int));
+	char *buffer = malloc(TAILLE_MAX);
+	BLK *blk = malloc(sizeof(BLK));
 
-	return 0;
+	switch (kv->hash) {
+		case 0: tmp = hash_0(key->ptr);
+						break;
+
+		case 1:tmp = hash_1(key->ptr);
+						break;
+
+		case 2:tmp = hash_2(key->ptr);
+						break;
+
+		default : break;
+	}
+
+	lseek(kv->fd_h,head_h+(tmp*sizeof(int)),SEEK_SET);
+	n=read(kv->fd_h,bufNum,sizeof(int));
+	//On vient de récupérer le numéro du bloc correspondant à la valeur hachée
+	if (n==0) { //Si trou
+		errno=ENOENT;
+		perror("Clé inexistente");
+		return -1;
+	}
+
+	tmp = atoi(bufNum);
+	lseek(kv->fd_blk,head_blk+tmp*4096,SEEK_SET);
+	/*Les blocs commencent à 1 */
+
+	/* code pour gérer les bloc */
+	n=read(kv->fd_h,bufNum,sizeof(int)); //On lit le num du bloc
+	blk->numBlk = atoi(bufNum);
+	n=read(kv->fd_h,bufNum,sizeof(int)); //nbr d'entrée
+	blk->nbrEnt = atoi(bufNum);
+	n=read(kv->fd_h,bufNum,sizeof(int)); //existence bloc suivant
+	blk->numExBlk = atoi(bufNum);
+	n=read(kv->fd_h,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+	blk->nextBlk = atoi(bufNum);
+
+	for(i=0;i<blk->nbrEnt;i++) {
+		n=read(kv->fd_h,bufNum,sizeof(len_t));
+		if (strcmp(bufNum, (char *)key->ptr)==0) {
+			while ( (n=read(kv->fd_dkv,buffer,1)>0) ) {
+				if (strcmp(buffer,"1")) {
+					read(kv->fd_dkv,buffer,sizeof(int));
+					read(kv->fd_dkv,buffer,sizeof(len_t));
+					if (strcmp(buffer,bufNum)==0) {
+						lseek(kv->fd_dkv,-sizeof(len_t)-sizeof(int)-1,SEEK_CUR);
+						char *temp = malloc(1);
+						temp = "0";
+						write(kv->fd_dkv,temp,1); //Changement du int d'existence
+						lseek(kv->fd_blk,head_blk+(tmp-1)*4096+sizeof(int),SEEK_SET);
+						read(kv->fd_blk,buffer,sizeof(int));
+						int nbrEntr = atoi(buffer);
+						char *newEnt = malloc(sizeof(int));
+						sprintf(newEnt,"%d",nbrEntr);
+						lseek(kv->fd_blk,-1,SEEK_CUR);
+						write(kv->fd_dkv,newEnt,sizeof(int)); //Changement du nbr d'entrée
+						free(buffer);
+						free(bufNum);
+						return 0;
+					}
+				}
+			}
+		}
+	}
+
+	int t;
+
+	/* Boucle qui va gérer successivement les différents blocs */
+	while(blk->nextBlk!=0) {
+		if ( (t=del(kv,blk,key)) == 1 ) {
+			free(blk);
+			free(buffer);
+			free(bufNum);
+			return 0;
+		}
+	}
+
+	errno=ENOENT;
+	perror("Clé inexistente");
+	return -1;
 }
 
 
 
 
-
+/* On suppose que le pointeur est situé juste après
+ * l'en-tête du fichier .dkv
+ */
 int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
-	kv_start(kv);
-	int n, lg;
+	int n, compt, lg;
+	len_t offset;
 	char *buf = malloc(TAILLE_MAX);
-	if ( (n=read(kv->fd_kv,buf,sizeof(int)))==0  ) { //On la longueur de la clé dans le fichier .kv
-		key=NULL;
-		val=NULL;
-		free(buf);
-		return 0;
-	}
-	lg = atoi(buf);
-	read(kv->fd_kv,buf,lg);
 	if (key==NULL)
 		key=malloc(sizeof(kv_datum));
-	key->ptr = (void *)buf;
-	key->len = lg;
-	/* On pourrait maintenant faire un kv_get, mais il n'y a que deux lectures à
-	faire, aussi on fera directement la lecture au lieu d'appeler la fonction */
-
-	read(kv->fd_kv,buf,sizeof(int));
-	lg = atoi(buf);
-	read(kv->fd_kv,buf,lg);
 	if (val==NULL)
 		val=malloc(sizeof(kv_datum));
-	val->ptr = (void *)buf;
-	val->len = lg;
-	free(buf);
-	return 1;
+
+	while ( (n=read(kv->fd_dkv,buf,1))!=0  ) { //On  lit la longueur de la clé dans le fichier .kv
+		compt = atoi(buf); //On récupère la valeur 0/1
+		if ( compt==1 ) { //Si il y a bien un couple stocké
+			lseek(kv->fd_dkv,sizeof(int),SEEK_CUR); //On se place à l'offset
+			n=read(kv->fd_dkv,buf,sizeof(len_t)); //On lit l'offset
+			offset = atoi(buf);
+			lseek(kv->fd_kv,offset,SEEK_SET); //Début de la cellule
+			n=read(kv->fd_dkv,buf,sizeof(int));//lecture longueur clé
+			lg = atoi(buf);
+			key->len = (len_t)lg;
+			n=read(kv->fd_dkv,buf,lg);//Récupération de la clé
+			key->ptr = (void *)buf;
+			n=read(kv->fd_dkv,buf,sizeof(int));//Lecture longeur valeur
+			lg = atoi(buf);
+			val->len = (len_t)lg;
+			n=read(kv->fd_dkv,buf,lg);
+			val->ptr = (void *)buf;
+
+			return 1;
+		}
+		else
+			lseek(kv->fd_dkv,sizeof(int)+sizeof(len_t),SEEK_CUR);
+			/* On se replace au début de la prochaine cellule si la cellule précédente
+			   est vide */
+	}
+
+	return 0;
 }
 
 int main() {
