@@ -357,8 +357,107 @@ int kv_get (KV *kv, const kv_datum *key, kv_datum *val) {
 	return 0;
 }
 
-
+/* Rentre le couple clé/valeur dans la base, remplace l'ancienne
+ * valeur par la nouvelle si la clé est présente
+ * Renvoie 1 en cas de succès, 0 sinon.
+ */
 int kv_put (KV *kv, const kv_datum *key, const kv_datum *val) {
+
+	int tmp,n,offset,i,lg,pos;
+	char *buffer = malloc(sizeof(len_t));
+	char *bufNum = malloc(TAILLE_MAX);
+	BLK *blk = malloc(sizeof(BLK));
+	char *null = "0000";
+	switch (kv->hash) {
+		case 0: tmp = hash_0(key->ptr);
+						break;
+
+		case 1:tmp = hash_1(key->ptr);
+						break;
+
+		case 2:tmp = hash_2(key->ptr);
+						break;
+
+		default : break;
+	}
+
+	lseek(kv->fd_h,head_h+tmp*sizeof(len_t),SEEK_SET);
+	n=read(kv->fd_h,buffer,sizeof(len_t));
+	if (n==0) {
+		/* Création d'une entrée dans le .h
+		 * Création d'un bloc dans le .blk
+		 * utilisation d'une fonction d'allocation
+		 */
+
+
+
+
+
+
+	}
+	else {
+		offset = atoi(buffer);
+		lseek(kv->fd_blk,offset,SEEK_SET);
+		n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
+		blk->numBlk = atoi(bufNum);
+		n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
+		blk->nbrEnt = atoi(bufNum);
+		n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
+		blk->numExBlk = atoi(bufNum);
+		n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+		blk->nextBlk = atoi(bufNum);
+
+		while (blk->numExBlk!=0) {//Parcours de tous les blocs correspondant à la clé
+			for(i=0;i<blk->nbrEnt;i++) {//Parcours de tous les offsets du bloc
+				n=read(kv->fd_blk,bufNum,sizeof(len_t));//Lecture de l'offset
+				if (strcmp(bufNum,null))
+					pos = lseek(kv->fd_blk,0,SEEK_CUR);
+
+				lseek(kv->fd_kv,atoi(bufNum),SEEK_SET);//On se place à l'offset dans .kv
+				n=read(kv->fd_blk,bufNum,sizeof(int));//On lit la longueur de la clé
+				lg = atoi(bufNum);
+				n=read(kv->fd_blk,bufNum,lg);//On lit la clé
+				if ( strcmp(bufNum,(char *)key->ptr)==0 ) {//Si les deux clés sont identiques
+					n=read(kv->fd_blk,bufNum,sizeof(int));//On lit la longeur de la valeur
+					lg = atoi(bufNum);
+					write(kv->fd_kv,(char *)val->ptr,val->len);//On remplace la valeur
+					return 1;//En cas de réussite
+				}
+			}
+
+			lseek(kv->fd_blk,head_blk + blk->nextBlk*4096,SEEK_SET);
+			n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
+			blk->numBlk = atoi(bufNum);
+			n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
+			blk->nbrEnt = atoi(bufNum);
+			n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
+			blk->numExBlk = atoi(bufNum);
+			n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+			blk->nextBlk = atoi(bufNum);
+		}
+		/* Si on est ici, alors la clé n'est pas encore dans la base
+		 * mais sa valeur de hachage existe déjà, pas besoin de créer
+		 * un bloc dans ce cas.
+		 * On va alors se placer au premier offset nul trouvé dans les blocs,
+		 * correspondant à l'offset pos.
+		 */
+
+		 /* Pos contient la position du curseur situé juste après le premier offset
+		  * nul trouvé pendant la vérification des clés.
+			*/
+		 lseek(kv->fd_blk,pos-sizeof(len_t),SEEK_SET);
+		 /* Il faut maintenant récupérer un offset libre dans le fichier .kv
+		 en passant par le fichier .dkv.
+		 utiliser les fonctions d'allocations worst/best.first fit.
+		 */
+
+
+
+
+	}
+
+
+
 
 	return 0;
 }
@@ -419,13 +518,13 @@ int del(KV *kv, BLK *blk,const kv_datum *key) {
 	char *buffer = malloc(TAILLE_MAX);
 
 	lseek(kv->fd_blk,head_blk+blk->numExBlk*4096,SEEK_SET);
-	n=read(kv->fd_h,bufNum,sizeof(int)); //On lit le num du bloc
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
 	blk->numBlk = atoi(bufNum);
-	n=read(kv->fd_h,bufNum,sizeof(int)); //nbr d'entrée
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
 	blk->nbrEnt = atoi(bufNum);
-	n=read(kv->fd_h,bufNum,sizeof(int)); //existence bloc suivant
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
 	blk->numExBlk = atoi(bufNum);
-	n=read(kv->fd_h,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
 	blk->nextBlk = atoi(bufNum);
 
 	for(i=0;i<blk->nbrEnt;i++) {
@@ -492,13 +591,13 @@ int kv_del (KV *kv, const kv_datum *key) {
 	/*Les blocs commencent à 1 */
 
 	/* code pour gérer les bloc */
-	n=read(kv->fd_h,bufNum,sizeof(int)); //On lit le num du bloc
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
 	blk->numBlk = atoi(bufNum);
-	n=read(kv->fd_h,bufNum,sizeof(int)); //nbr d'entrée
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
 	blk->nbrEnt = atoi(bufNum);
-	n=read(kv->fd_h,bufNum,sizeof(int)); //existence bloc suivant
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
 	blk->numExBlk = atoi(bufNum);
-	n=read(kv->fd_h,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+	n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
 	blk->nextBlk = atoi(bufNum);
 
 	for(i=0;i<blk->nbrEnt;i++) {
@@ -578,7 +677,6 @@ int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 			val->len = (len_t)lg;
 			n=read(kv->fd_dkv,buf,lg);
 			val->ptr = (void *)buf;
-
 			free(buf);
 			return 1;
 		}
