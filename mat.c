@@ -132,6 +132,10 @@ len_t best_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
 */
 
 
+
+/* On supose que l'offset donné en argument est l'offset situé
+ * au début du descripteur à monter, donc au 0/1
+ */
 int decale_haut(KV *kv, len_t offset) {
 	char *buffer = malloc(TAILLE_MAX);
 	int n;
@@ -144,7 +148,7 @@ int decale_haut(KV *kv, len_t offset) {
 	lseek(kv->fd_dkv,offset,SEEK_SET);//On se place à la fin de la cellule à supprimer
 
 	while( (n=read(kv->fd_dkv,buffer,1+2*sizeof(len_t))!=0) ) {//Tant qu'on lit
-		lseek(kv->fd_dkv,-1-2*sizeof(len_t),SEEK_CUR);//On se place à la cellule précédente
+		lseek(kv->fd_dkv,2*(-1-2*sizeof(len_t)),SEEK_CUR);//On se place à la cellule précédente
 		write(kv->fd_dkv,buffer,1+2*sizeof(len_t));//On écrit la cellule suivante lue
 		lseek(kv->fd_dkv,1+2*sizeof(len_t),SEEK_CUR);//On se place à la cellule d'après
 	}
@@ -579,13 +583,42 @@ void kv_start (KV *kv) {
  */
 
 void fusionne_cel(KV *kv) {
-	int i,n,lg,offset;
+	int n,lg,offset;
 	char *buffer = malloc(sizeof(len_t));
 	lseek(kv->fd_dkv,-1-2*sizeof(len_t),SEEK_CUR);
-	n=read(kv->fd_dkv,buffer,1);
-	if ( atoi(buffer)==0) {
-
+	n=read(kv->fd_dkv,buffer,1);//Lecture bit descripteur au dessus
+	if ( atoi(buffer)==0) {//Si cellule du dessus vide
+		n=read(kv->fd_dkv,buffer,sizeof(len_t));//Longueur cellule au dessus
+		lg = atoi(buffer);
+		lseek(kv->fd_dkv,1+sizeof(len_t),SEEK_CUR);//longueur cellule à modifier
+		n=read(kv->fd_dkv,buffer,sizeof(len_t));
+		lg+=atoi(buffer);//On est après la longueur de la cellule "mère"
+		lseek(kv->fd_dkv,-1-3*sizeof(len_t),SEEK_CUR);
+		sprintf(buffer,"%d",lg);
+		write(kv->fd_dkv,buffer,sizeof(len_t));//écriture de la nouvelle Longueur
+		lseek(kv->fd_dkv,sizeof(len_t),SEEK_CUR);
+		offset = lseek(kv->fd_dkv,0,SEEK_CUR);
+		/* On est placé après la "nouvelle" cellule, au début de l'ancienne */
+		decale_haut(kv,offset);
 	}
+	lseek(kv->fd_dkv,1+4*sizeof(len_t),SEEK_CUR);
+	/* On était placé au bit du descripteur précédent, si on est ici on est pas allé dans le if
+	 * On se place alors au début de la cellule après la cellule à fusionner
+	 */
+	 n=read(kv->fd_dkv,buffer,1);
+	 if ( atoi(buffer)==0) {
+		 n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture longueur cellule
+		 lseek(kv->fd_dkv,-1-3*sizeof(len_t),SEEK_CUR);
+		 lg=atoi(buffer);
+		 n=read(kv->fd_dkv,buffer,sizeof(len_t));
+		 lg+=atoi(buffer);
+		 lseek(kv->fd_dkv,-sizeof(len_t),SEEK_CUR);
+		 sprintf(buffer,"%d",lg);
+		 write(kv->fd_dkv,buffer,sizeof(len_t));
+		 lseek(kv->fd_dkv,sizeof(len_t),SEEK_CUR);
+		 offset = lseek(kv->fd_dkv,0,SEEK_CUR);
+		 decale_haut(kv,offset);
+	 }
 }
 
 
