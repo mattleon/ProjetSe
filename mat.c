@@ -10,8 +10,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
-#define TAILLE_MIN 32
-#define TAILLE_MAX 2048
+#define TAILLE_MIN 1024
+#define TAILLE_MAX 4096
 #define head_h 2
 #define head_blk 1
 #define head_kv 1
@@ -74,7 +74,7 @@ typedef struct kv_datum kv_datum ;
 /* prend en argument l'offset correspondant à l'offset dans .blk */
 len_t first_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
 
-	int n,lg;
+	unsigned int n,lg;
 	len_t off,off1;;
 	char *buffer = malloc(TAILLE_MAX);
 	char *buf = malloc(sizeof(len_t));
@@ -88,15 +88,15 @@ len_t first_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
 			 * l'un qui est donné et l'autre qui contient une clé d'un octet
 			 * et une valeur de 0 octets
 			 */
-			if ( lg>=(4*sizeof(int)+1+key->len + val->len)) {
+			if ( lg>=(4*sizeof(len_t)+1+key->len + val->len)) {
 				n=read(kv->fd_dkv,buffer,sizeof(int));//Récupération offset de la cellule dans .kv
 				off = atoi(buffer);//Offset du début de la cellule dans .kv
 				lseek(kv->fd_kv,off,SEEK_SET);
 				sprintf(buf,"%d",key->len);
-				write(kv->fd_dkv,buf,sizeof(int));//Ecriture de la longueur de la clé
+				write(kv->fd_dkv,buf,sizeof(len_t));//Ecriture de la longueur de la clé
 				write(kv->fd_dkv,key->ptr,key->len);//Ecrite de la clé
 				sprintf(buf,"%d",val->len);
-				write(kv->fd_dkv,buf,sizeof(int));//ecriture de la lg de la val
+				write(kv->fd_dkv,buf,sizeof(len_t));//ecriture de la lg de la val
 				write(kv->fd_dkv,val->ptr,val->len);//Ecriture de la val
 				off1 = lseek(kv->fd_kv,0,SEEK_SET);//On récupère l'offset actuel dans le .kv
 				/* On se place dans le .blk pour y inscrire la valeur
@@ -104,7 +104,7 @@ len_t first_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
 				 */
 				lseek(kv->fd_blk,offset,SEEK_SET);
 				sprintf(buf,"%d",off);
-				write(kv->fd_blk,buf;sizeof(len_t));
+				write(kv->fd_blk,buf,sizeof(len_t));
 
 			}
 		}
@@ -130,6 +130,66 @@ len_t best_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
 	return 0;
 }
 */
+
+
+int decale_haut(KV *kv, len_t offset) {
+	char *buffer = malloc(TAILLE_MAX);
+	int n;
+	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On récupère le nombre de cellule
+	lseek(kv->fd_dkv,sizeof(int),SEEK_SET);//On se place au nombre de cellules
+	unsigned int nb = atoi(buffer)-1;//Nb cellule -1
+	sprintf(buffer,"%d",nb);
+	write(kv->fd_dkv,buffer,sizeof(len_t));
+	lseek(kv->fd_dkv,offset,SEEK_SET);//On se place à la fin de la cellule à supprimer
+
+	while( (n=read(kv->fd_dkv,buffer,1+2*sizeof(len_t))!=0) ) {//Tant qu'on lit
+		lseek(kv->fd_dkv,-1-2*sizeof(len_t),SEEK_CUR);//On se place à la cellule précédente
+		write(kv->fd_dkv,buffer,1+2*sizeof(len_t));//On écrit la cellule suivante lue
+		lseek(kv->fd_dkv,1+2*sizeof(len_t),SEEK_CUR);//On se place à la cellule d'après
+	}
+
+	free(buffer);
+	return 0;
+}
+/*A la fin de cette fonction, la dernière cellule est en double,
+C'est pour ça qu'on met le nombre de cellules dans l'en-tête.*/
+
+
+//L'offset correspond au début de la celulle à descendre
+//A l'offset donné, on écrira la nouvelle cellule
+int decale_bas(KV *kv, len_t offset) {
+	char *buffer = malloc(TAILLE_MAX);
+	unsigned int n, nb_cell,nb;
+	unsigned int off,i;
+	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On récupère le nombre de cellule
+	lseek(kv->fd_dkv,sizeof(int),SEEK_SET);//On se place au nombre de cellules
+	nb_cell  = atoi(buffer)+1;//Nb cellule +1
+	sprintf(buffer,"%d",nb_cell);
+	write(kv->fd_dkv,buffer,sizeof(len_t));//Ré-écriture de la nouvelle valeur
+	//Le pointeur est donc à la fin de l'entête, à la première cellule;
+
+	for(i=0;i<nb_cell-1;i++) {
+		lseek(kv->fd_dkv,1+2*sizeof(len_t),SEEK_CUR);//On bouge d'une cellule
+		off=lseek(kv->fd_dkv,0,SEEK_CUR);//Récupération de l'offset actel
+		nb++;
+		if (off==offset) {
+			break;
+		}
+	}
+	//A la fin de la boucle, on est donc au début de la cellule à déplacer
+	//On a le nombre de cellules parcourues
+	nb = nb_cell-nb; //Nombre de cellules restantes
+	n=read(kv->fd_dkv,buffer,nb*(1+2*sizeof(len_t)));//On récupère toutes les cellules restantes
+	lseek(kv->fd_dkv,offset+(1+2*sizeof(len_t)),SEEK_SET);
+	write(kv->fd_dkv,buffer,nb*(1+2*sizeof(len_t)));
+
+
+
+	return 0;
+}
+
 
 len_t hash_0(kv_datum *a){
  	unsigned int sum=0;
@@ -513,57 +573,39 @@ void kv_start (KV *kv) {
 
 /* On suppose que le pointeur est situé juste avant le 0
  * dans le descripteur que l'on vient de libérer
+ * On suppose aussi que la fonction fusionne étant appelée à chaque del,
+ * Il n'y a que deux cellules à fusionner, soit celle-là et celle du dessus,
+ * soit celle-là et celle du dessous.
  */
- /*
+
 void fusionne_cel(KV *kv) {
-	int lg,lg1,val=0,finLg;
+	int i,n,lg,offset;
 	char *buffer = malloc(sizeof(len_t));
+	lseek(kv->fd_dkv,-1-2*sizeof(len_t),SEEK_CUR);
 	n=read(kv->fd_dkv,buffer,1);
-	n=read(kv->fd_dkv,buffer,sizeof(int));
-	lg=atoi(buffer);
-	lseek(kv->fd_dkv,-1-sizeof(int)-sizeof(len_t),SEEK_CUR);
-	n=read(kv->fd_dkv,buffer,1);
-	if (strcmp(buffer,"0")==0) {
-		val++;
-		n=read(kv->fd_dkv,buffer,sizeof(int));
-		lg1=atoi(buffer);
-		lseek(kv->fd_dkv,-sizeof(int),SEEK_CUR);
-		sprintf(buffer,"%d",lg+lg1);
-		write(kv->fd_dkv,buffer,sizeof(int));
-		lseek(kv->fd_dkv,sizeof(len_t)+1,SEEK_CUR);
-	}
-	switch(val) {
-		case 0: n=read(kv->fd_dkv,buffer,sizeof(int));
-						lg = atoi(buffer);
-						lseek(kv->fd_dkv,sizeof(len_t)+1,SEEK_CUR);
-						n=read(kv->fd_dkv,buffer,sizeof(int));
-						if (strcmp(buffer,"0")==0) {
+	if ( atoi(buffer)==0) {
 
-						}
-		case 1:
-
-		default: break;
 	}
 }
-*/
+
 
 /* Fonction intermédiaire qui s'occupe de vérifier si une clé est dans un bloc
- * Si la clé est dans le bloc, elle l'efface, sinon renvoie -1
+ * Si la clé est dans le bloc, elle l'efface et renvoie 1, sinon renvoie 0
  * blk contient l'en-tête du bloc
  */
 int del(KV *kv, BLK *blk,const kv_datum *key) {
 	int n,i;
-	char *bufNum = malloc(sizeof(int));
+	char *bufNum = malloc(sizeof(len_t));
 	char *buffer = malloc(TAILLE_MAX);
 
 	lseek(kv->fd_blk,head_blk+blk->numExBlk*4096,SEEK_SET);
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //On lit le num du bloc
 	blk->numBlk = atoi(bufNum);
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //nbr d'entrée
 	blk->nbrEnt = atoi(bufNum);
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //existence bloc suivant
 	blk->numExBlk = atoi(bufNum);
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //num bloc suivant (0 par défaut)
 	blk->nextBlk = atoi(bufNum);
 
 	for(i=0;i<blk->nbrEnt;i++) {
@@ -571,20 +613,20 @@ int del(KV *kv, BLK *blk,const kv_datum *key) {
 		if (strcmp(bufNum, (char *)key->ptr)==0) {
 			while ( (n=read(kv->fd_dkv,buffer,1)>0) ) {
 				if (strcmp(buffer,"1")) {
-					read(kv->fd_dkv,buffer,sizeof(int));
+					read(kv->fd_dkv,buffer,sizeof(len_t));
 					read(kv->fd_dkv,buffer,sizeof(len_t));
 					if (strcmp(buffer,bufNum)==0) {
-						lseek(kv->fd_dkv,-sizeof(len_t)-sizeof(int)-1,SEEK_CUR);
+						lseek(kv->fd_dkv,-sizeof(len_t)-sizeof(len_t)-1,SEEK_CUR);
 						char *temp = malloc(1);
 						temp = "0";
 						write(kv->fd_dkv,temp,1); //Changement du int d'existence
-						lseek(kv->fd_blk,head_blk+blk->numExBlk*4096+sizeof(int),SEEK_SET);
-						read(kv->fd_blk,buffer,sizeof(int));
+						lseek(kv->fd_blk,head_blk+blk->numExBlk*4096+sizeof(len_t),SEEK_SET);
+						read(kv->fd_blk,buffer,sizeof(len_t));
 						int nbrEntr = atoi(buffer);
-						char *newEnt = malloc(sizeof(int));
+						char *newEnt = malloc(sizeof(len_t));
 						sprintf(newEnt,"%d",nbrEntr);
 						lseek(kv->fd_blk,-1,SEEK_CUR);
-						write(kv->fd_dkv,newEnt,sizeof(int)); //Changement du nbr d'entrée
+						write(kv->fd_dkv,newEnt,sizeof(len_t)); //Changement du nbr d'entrée
 						free(buffer);
 						free(bufNum);
 						return 1;
@@ -599,7 +641,7 @@ int del(KV *kv, BLK *blk,const kv_datum *key) {
 int kv_del (KV *kv, const kv_datum *key) {
 	len_t tmp;
 	int n,i;
-	char *bufNum = malloc(sizeof(int));
+	char *bufNum = malloc(sizeof(len_t));
 	char *buffer = malloc(TAILLE_MAX);
 	BLK *blk = malloc(sizeof(BLK));
 
@@ -616,8 +658,8 @@ int kv_del (KV *kv, const kv_datum *key) {
 		default : break;
 	}
 
-	lseek(kv->fd_h,head_h+(tmp*sizeof(int)),SEEK_SET);
-	n=read(kv->fd_h,bufNum,sizeof(int));
+	lseek(kv->fd_h,head_h+(tmp*sizeof(len_t)),SEEK_SET);
+	n=read(kv->fd_h,bufNum,sizeof(len_t));
 	//On vient de récupérer le numéro du bloc correspondant à la valeur hachée
 	if (n==0) { //Si trou
 		errno=ENOENT;
@@ -630,13 +672,13 @@ int kv_del (KV *kv, const kv_datum *key) {
 	/*Les blocs commencent à 1 */
 
 	/* code pour gérer les bloc */
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //On lit le num du bloc
 	blk->numBlk = atoi(bufNum);
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //nbr d'entrée
 	blk->nbrEnt = atoi(bufNum);
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //existence bloc suivant
 	blk->numExBlk = atoi(bufNum);
-	n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
+	n=read(kv->fd_blk,bufNum,sizeof(len_t)); //num bloc suivant (0 par défaut)
 	blk->nextBlk = atoi(bufNum);
 
 	for(i=0;i<blk->nbrEnt;i++) {
@@ -644,20 +686,20 @@ int kv_del (KV *kv, const kv_datum *key) {
 		if (strcmp(bufNum, (char *)key->ptr)==0) {
 			while ( (n=read(kv->fd_dkv,buffer,1)>0) ) {
 				if (strcmp(buffer,"1")) {
-					read(kv->fd_dkv,buffer,sizeof(int));
+					read(kv->fd_dkv,buffer,sizeof(len_t));
 					read(kv->fd_dkv,buffer,sizeof(len_t));
 					if (strcmp(buffer,bufNum)==0) {
 						lseek(kv->fd_dkv,-sizeof(len_t)-sizeof(int)-1,SEEK_CUR);
 						char *temp = malloc(1);
 						temp = "0";
 						write(kv->fd_dkv,temp,1); //Changement du int d'existence
-						lseek(kv->fd_blk,head_blk+(tmp-1)*4096+sizeof(int),SEEK_SET);
-						read(kv->fd_blk,buffer,sizeof(int));
+						lseek(kv->fd_blk,head_blk+(tmp-1)*4096+sizeof(len_t),SEEK_SET);
+						read(kv->fd_blk,buffer,sizeof(len_t));
 						int nbrEntr = atoi(buffer);
-						char *newEnt = malloc(sizeof(int));
+						char *newEnt = malloc(sizeof(len_t));
 						sprintf(newEnt,"%d",nbrEntr);
 						lseek(kv->fd_blk,-1,SEEK_CUR);
-						write(kv->fd_dkv,newEnt,sizeof(int)); //Changement du nbr d'entrée
+						write(kv->fd_dkv,newEnt,sizeof(len_t)); //Changement du nbr d'entrée
 						free(buffer);
 						free(bufNum);
 						return 0;
@@ -702,16 +744,16 @@ int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 	while ( (n=read(kv->fd_dkv,buf,1))!=0  ) { //On  lit la longueur de la clé dans le fichier .kv
 		compt = atoi(buf); //On récupère la valeur 0/1
 		if ( compt==1 ) { //Si il y a bien un couple stocké
-			lseek(kv->fd_dkv,sizeof(int),SEEK_CUR); //On se place à l'offset
+			lseek(kv->fd_dkv,sizeof(len_t),SEEK_CUR); //On se place à l'offset
 			n=read(kv->fd_dkv,buf,sizeof(len_t)); //On lit l'offset
 			offset = atoi(buf);
 			lseek(kv->fd_kv,offset,SEEK_SET); //Début de la cellule
-			n=read(kv->fd_dkv,buf,sizeof(int));//lecture longueur clé
+			n=read(kv->fd_dkv,buf,sizeof(len_t));//lecture longueur clé
 			lg = atoi(buf);
 			key->len = (len_t)lg;
 			n=read(kv->fd_dkv,buf,lg);//Récupération de la clé
 			key->ptr = (void *)buf;
-			n=read(kv->fd_dkv,buf,sizeof(int));//Lecture longeur valeur
+			n=read(kv->fd_dkv,buf,sizeof(len_t));//Lecture longeur valeur
 			lg = atoi(buf);
 			val->len = (len_t)lg;
 			n=read(kv->fd_dkv,buf,lg);
@@ -720,7 +762,7 @@ int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 			return 1;
 		}
 		else
-			lseek(kv->fd_dkv,sizeof(int)+sizeof(len_t),SEEK_CUR);
+			lseek(kv->fd_dkv,sizeof(len_t)+sizeof(len_t),SEEK_CUR);
 			/* On se replace au début de la prochaine cellule si la cellule précédente
 			   est vide */
 	}
