@@ -16,7 +16,7 @@
 #define head_blk 1
 #define head_kv 1
 #define head_dkv 1
-volatile int taille_num=0;
+//volatile int taille_num=0;
 
 
 typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
@@ -68,56 +68,95 @@ typedef struct kv_datum kv_datum ;
  * 0 si le prochain bloc n'existe pas, sinon 1
  * le numéro du bloc
  */
-int write_blk(KV *kv, char * num) {
-	int n;
-	taille_num = sizeof(num);
-	char *tmp = 0;
-	if ( (n=write(kv->fd_blk,num,taille_num)==-1) ) { //écrite du num du bloc
-		perror("Function write_blk");
-		return 0;
-	}
-	if ( (n=write(kv->fd_blk,tmp,taille_num)==-1) ) {//écrite du nombre d'entrée
-		perror("Write_blk");
-		return 0;
-	}
-	if ( (n=write(kv->fd_blk,tmp,taille_num)==-1) ) { //Existence ou pas du prochain bloc
-		perror("Write_blk");
-		return 0;
-	}
-	if ( (n=write(kv->fd_blk,tmp,taille_num))==-1 ) { //écriture du num du prochain bloc
-		perror("Write_blk");
-		return 0;
+
+//typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
+
+/* prend en argument l'offset correspondant à l'offset dans .blk */
+len_t first_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
+
+	int n,lg;
+	len_t off,off1;;
+	char *buffer = malloc(TAILLE_MAX);
+	char *buf = malloc(sizeof(len_t));
+	lseek(kv->fd_dkv,head_dkv,SEEK_SET);
+	while ( (n=read(kv->fd_dkv,buffer,1))!=0 ) {
+		if (atoi(buffer)==0) {//Si emplacement libre
+			n=read(kv->fd_dkv,buffer,sizeof(int));//Lecture longueur cellule .kv
+			lg = atoi(buf);
+			/* Vérification longueur suffisante
+			 * suffisant si : place pour deux couples
+			 * l'un qui est donné et l'autre qui contient une clé d'un octet
+			 * et une valeur de 0 octets
+			 */
+			if ( lg>=(4*sizeof(int)+1+key->len + val->len)) {
+				n=read(kv->fd_dkv,buffer,sizeof(int));//Récupération offset de la cellule dans .kv
+				off = atoi(buffer);//Offset du début de la cellule dans .kv
+				lseek(kv->fd_kv,off,SEEK_SET);
+				sprintf(buf,"%d",key->len);
+				write(kv->fd_dkv,buf,sizeof(int));//Ecriture de la longueur de la clé
+				write(kv->fd_dkv,key->ptr,key->len);//Ecrite de la clé
+				sprintf(buf,"%d",val->len);
+				write(kv->fd_dkv,buf,sizeof(int));//ecriture de la lg de la val
+				write(kv->fd_dkv,val->ptr,val->len);//Ecriture de la val
+				off1 = lseek(kv->fd_kv,0,SEEK_SET);//On récupère l'offset actuel dans le .kv
+				/* On se place dans le .blk pour y inscrire la valeur
+				 * de l'offset dans le kv à l'offset donné en argument.
+				 */
+				lseek(kv->fd_blk,offset,SEEK_SET);
+				sprintf(buf,"%d",off);
+				write(kv->fd_blk,buf;sizeof(len_t));
+
+			}
+		}
+
 	}
 
-	return 1;
+
+
+	return 0;
+}
+/*
+len_t worst_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
+
+
+
+	return 0;
 }
 
- len_t hash_0(kv_datum *a){
+len_t best_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
+
+
+
+	return 0;
+}
+*/
+
+len_t hash_0(kv_datum *a){
  	unsigned int sum=0;
  	unsigned int i;
  	for(i=0; i<a->len; i++)
  		sum+=((char*)a->ptr)[i];
  	printf("sum1 %d\n", sum%999983);
  	return sum%999983;
- }
+}
 
- len_t hash_1(kv_datum *a){
+len_t hash_1(kv_datum *a){
  	unsigned int sum=0;
  	unsigned int i=0;
  	for(i=0; i<a->len; i++)
  		sum+=sum+((char*)a->ptr)[i];
  	printf("sum2 %d\n", sum%4096);
  	return sum%4096;
- }
+}
 
- len_t hash_2(kv_datum *a){
+len_t hash_2(kv_datum *a){
  	unsigned int sum=0;
  	unsigned int i=0;
  	for(i=0; i<a->len; i++)
  		sum+=(sum+i+1)*((char*)a->ptr)[i];
  	printf("sum2 %d\n", sum%4096);
  	return sum%4096;
- }
+}
 
  KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
  	KV *new = malloc(sizeof(KV));
