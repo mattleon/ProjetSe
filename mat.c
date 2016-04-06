@@ -69,130 +69,276 @@ typedef struct kv_datum kv_datum ;
  * le numéro du bloc
  */
 
-//typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
+ /* On supose que l'offset donné en argument est l'offset situé
+  * au début du descripteur à monter, donc au 0/1
+  */
+ int decale_haut(KV *kv, len_t offset) {
+ 	char *buffer = malloc(TAILLE_MAX);
+ 	int n;
+ 	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
+ 	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On récupère le nombre de cellule
+ 	lseek(kv->fd_dkv,sizeof(int),SEEK_SET);//On se place au nombre de cellules
+ 	unsigned int nb = atoi(buffer)-1;//Nb cellule -1
+ 	sprintf(buffer,"%d",nb);
+ 	write(kv->fd_dkv,buffer,sizeof(len_t));
+ 	lseek(kv->fd_dkv,offset,SEEK_SET);//On se place à la fin de la cellule à supprimer
 
-/* prend en argument l'offset correspondant à l'offset dans .blk */
+ 	while( (n=read(kv->fd_dkv,buffer,1+2*sizeof(len_t))!=0) ) {//Tant qu'on lit
+ 		lseek(kv->fd_dkv,2*(-1-2*sizeof(len_t)),SEEK_CUR);//On se place à la cellule précédente
+ 		write(kv->fd_dkv,buffer,1+2*sizeof(len_t));//On écrit la cellule suivante lue
+ 		lseek(kv->fd_dkv,1+2*sizeof(len_t),SEEK_CUR);//On se place à la cellule d'après
+ 	}
+
+ 	free(buffer);
+ 	return 0;
+ }
+ /*A la fin de cette fonction, la dernière cellule est en double,
+ C'est pour ça qu'on met le nombre de cellules dans l'en-tête.*/
+
+
+ //L'offset correspond au début de la celulle à descendre
+ //A l'offset donné, on écrira la nouvelle cellule
+ int decale_bas(KV *kv, len_t offset) {
+ 	char *buffer = malloc(TAILLE_MAX);
+ 	int n, nb_cell,nb,i;
+ 	unsigned int off;
+ 	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
+ 	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On récupère le nombre de cellule
+	if (n==-1) {
+		perror("read");
+		return -1;
+	}
+ 	lseek(kv->fd_dkv,sizeof(int),SEEK_SET);//On se place au nombre de cellules
+ 	nb_cell  = atoi(buffer)+1;//Nb cellule +1
+ 	sprintf(buffer,"%d",nb_cell);
+ 	write(kv->fd_dkv,buffer,sizeof(len_t));//Ré-écriture de la nouvelle valeur
+ 	//Le pointeur est donc à la fin de l'entête, à la première cellule;
+
+ 	for(i=0;i<nb_cell-1;i++) {
+ 		lseek(kv->fd_dkv,1+2*sizeof(len_t),SEEK_CUR);//On bouge d'une cellule
+ 		off=lseek(kv->fd_dkv,0,SEEK_CUR);//Récupération de l'offset actel
+ 		nb++;
+ 		if (off==offset) {
+ 			break;
+ 		}
+ 	}
+ 	//A la fin de la boucle, on est donc au début de la cellule à déplacer
+ 	//On a le nombre de cellules parcourues
+ 	nb = nb_cell-nb; //Nombre de cellules restantes
+ 	n=read(kv->fd_dkv,buffer,nb*(1+2*sizeof(len_t)));//On récupère toutes les cellules restantes
+ 	lseek(kv->fd_dkv,offset+(1+2*sizeof(len_t)),SEEK_SET);
+ 	write(kv->fd_dkv,buffer,nb*(1+2*sizeof(len_t)));
+
+
+
+ 	return 0;
+ }
+
+/* Met dans la première cellule libre dkv qui a une taille suffisante
+ * prend en argument l'offset correspondant à l'offset dans .blk
+ * Renvoie 0 en cas d'échec, sinon1
+ */
 len_t first_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
+	unsigned int nb_cell,i,vali=0,off,lg_tot,off1;
+	int n;
+	char *buffer = malloc(sizeof(len_t));
+	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));
+	if (n==-1) {
+		perror("read");
+		return -1;
+	}
+	nb_cell = atoi(buffer);
 
-	unsigned int n,lg;
-	len_t off,off1;;
-	char *buffer = malloc(TAILLE_MAX);
-	char *buf = malloc(sizeof(len_t));
-	lseek(kv->fd_dkv,head_dkv,SEEK_SET);
-	while ( (n=read(kv->fd_dkv,buffer,1))!=0 ) {
-		if (atoi(buffer)==0) {//Si emplacement libre
-			n=read(kv->fd_dkv,buffer,sizeof(int));//Lecture longueur cellule .kv
-			lg = atoi(buf);
-			/* Vérification longueur suffisante
-			 * suffisant si : place pour deux couples
-			 * l'un qui est donné et l'autre qui contient une clé d'un octet
-			 * et une valeur de 0 octets
-			 */
-			if ( lg>=(4*sizeof(len_t)+1+key->len + val->len)) {
-				n=read(kv->fd_dkv,buffer,sizeof(int));//Récupération offset de la cellule dans .kv
-				off = atoi(buffer);//Offset du début de la cellule dans .kv
-				lseek(kv->fd_kv,off,SEEK_SET);
-				sprintf(buf,"%d",key->len);
-				write(kv->fd_dkv,buf,sizeof(len_t));//Ecriture de la longueur de la clé
-				write(kv->fd_dkv,key->ptr,key->len);//Ecrite de la clé
-				sprintf(buf,"%d",val->len);
-				write(kv->fd_dkv,buf,sizeof(len_t));//ecriture de la lg de la val
-				write(kv->fd_dkv,val->ptr,val->len);//Ecriture de la val
-				off1 = lseek(kv->fd_kv,0,SEEK_SET);//On récupère l'offset actuel dans le .kv
-				/* On se place dans le .blk pour y inscrire la valeur
-				 * de l'offset dans le kv à l'offset donné en argument.
-				 */
-				lseek(kv->fd_blk,offset,SEEK_SET);
-				sprintf(buf,"%d",off);
-				write(kv->fd_blk,buf,sizeof(len_t));
-
+	for(i=0;i<nb_cell;i++) {
+		n=read(kv->fd_dkv,buffer,1);//Lecture bit libre ou pas
+		if ( atoi(buffer)==0) {
+			n=read(kv->fd_dkv,buffer,sizeof(len_t));//lecture longueur place
+			if ( (unsigned int)atoi(buffer)>=(2*sizeof(len_t)+key->len+val->len)) {
+				vali=1;
+				lg_tot=atoi(buffer);
+				break;
 			}
 		}
-
+		lseek(kv->fd_dkv,2*sizeof(len_t),SEEK_CUR);//On se place à la cellule suivante
 	}
 
+	if (vali==0) {//Si aucune cellule vide, alors renvoyer 0
+		return 0;
+	}
 
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture offset
+	/* Le pointeur est donc au niveau de la cellule suivante
+	 * On retient l'offset en mémoire et on fait un décalage vers le base
+	 */
+	off = lseek(kv->fd_dkv,0,SEEK_CUR);
+	lseek(kv->fd_blk,offset,SEEK_SET);
+	write(kv->fd_blk,buffer,sizeof(len_t));
+	lseek(kv->fd_kv,atoi(buffer),SEEK_SET);
+	sprintf(buffer,"%d",key->len);
+	write(kv->fd_kv,buffer,sizeof(len_t));//Ecriture longueur clé
+	write(kv->fd_kv,(char *)key->ptr,sizeof(len_t));//Ecriture clé
+	sprintf(buffer,"%d",val->len);
+	write(kv->fd_kv,buffer,sizeof(len_t));//Ecriture longueur val
+	write(kv->fd_kv,(char *)val->ptr,key->len);//Ecriture val
+	off1 = lseek(kv->fd_kv,0,SEEK_CUR);
+	//pointeur dans le .kv à la fin de la "cellule"
+	//Faire vérif taille cellule et séparation si besoin est.
+	if ( lg_tot>=( (2*sizeof(len_t)+key->len+val->len)+(2*sizeof(len_t)+1) )) {
+		lg_tot = lg_tot-2*sizeof(len_t)-key->len-val->len;
+		decale_bas(kv,off);
+		lseek(kv->fd_dkv,off,SEEK_SET);
+		sprintf(buffer,"%d",0);
+		write(kv->fd_blk,buffer,1);//Ecriture bit descripteur
+		sprintf(buffer,"%d",lg_tot);
+		write(kv->fd_dkv,buffer,sizeof(len_t));//Ecriture longueur de la case restante
+		sprintf(buffer,"%d",off1);
+		write(kv->fd_dkv,buffer,sizeof(len_t));//Ecriture offset du .kv
+	}
 
-	return 0;
+	return 1;
 }
-/*
+
+/* L'offset donné en argument correspond à l'offset dans le blk
+ * Là où doit être écrit l'offset du kv
+ * Renvoie 0 si échec, sinon 1
+ */
 len_t worst_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
+	char *buffer = malloc(TAILLE_MIN);
+	int n,i,nb_cell,off,off1;
+	int lg=0;
+	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture nombre cellule
+	if (n==-1) {
+		perror("read");
+		return -1;
+	}
+	nb_cell=atoi(buffer);
 
+	for(i=0;i<nb_cell;i++) {
+		n=read(kv->fd_dkv,buffer,1);//Lecture prmeier bit descripteur
+		if ( atoi(buffer)==0) {
+			n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture de la longueur de la case
+			if ( lg > atoi(buffer) ){
+				lg = atoi(buffer);//On choisit la plus grand longueur
+				off = lseek(kv->fd_dkv,0,SEEK_CUR);//On retient la position actuelle
+			}
+		}
+		lseek(kv->fd_dkv,sizeof(len_t),SEEK_CUR);//On passe l'offset
+	}
 
+	lseek(kv->fd_dkv,off,SEEK_CUR);//On se replace à l'offset de la plus grand longueur
+	if ((unsigned int)lg < (2*sizeof(len_t)+val->len+key->len) )//Verification de la place
+		return 0;
 
-	return 0;
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On lit l'offset
+	off=atoi(buffer);
+	lseek(kv->fd_blk,offset,SEEK_SET);//On se place à l'offset donné en arg
+	sprintf(buffer,"%d",off);
+	write(kv->fd_blk,buffer,sizeof(len_t));//Ecriture de l'offset du kv dans blk
+	lseek(kv->fd_kv,off,SEEK_SET);//On se place dans le kv
+	sprintf(buffer,"%d",key->len);
+	write(kv->fd_kv,buffer,sizeof(len_t));//Ecriture longueur clé
+	write(kv->fd_kv,(char *)key->ptr,key->len);//Ecriture clé
+	sprintf(buffer,"%d",val->len);
+	write(kv->fd_kv,buffer,sizeof(len_t));//Ecriture longueur val
+	write(kv->fd_kv,(char *)val->ptr,val->len);//Ecriture val
+	off1 = lseek(kv->fd_kv,0,SEEK_CUR);//Récupérer l'adresse de la nouvelle future case au cas-où
+	//Le pointeur est donc à la fin de la "case"
+
+	if ( (unsigned int)lg >= (4*sizeof(len_t)+1+key->len+val->len) ) {//Si taille suffisante pour nouvelle case
+		decale_bas(kv,off);//Faire la place pour la nouvelle case
+		lseek(kv->fd_dkv,off,SEEK_SET);//On se place au début de la nouvelle case
+		sprintf(buffer,"%d",0);
+		write(kv->fd_dkv,buffer,1);//Ecriture du bit d'emplacement libre
+		sprintf(buffer,"%ld",lg-(2*sizeof(len_t)-key->len-val->len));
+		write(kv->fd_dkv,buffer,sizeof(len_t));//Ecritue de la longueur restante
+		sprintf(buffer,"%d",off1);
+		write(kv->fd_dkv,buffer,sizeof(len_t));//Ecriture de l'offset
+	}
+
+	return 1;
 }
+
 
 len_t best_fit(KV *kv, kv_datum *key, kv_datum *val, len_t offset) {
-
-
-
-	return 0;
-}
-*/
-
-
-
-/* On supose que l'offset donné en argument est l'offset situé
- * au début du descripteur à monter, donc au 0/1
- */
-int decale_haut(KV *kv, len_t offset) {
-	char *buffer = malloc(TAILLE_MAX);
-	int n;
+	char *buffer = malloc(TAILLE_MIN);
+	int n,i,nb_cell,off,off1,j=0;
+	int lg=0;
 	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
-	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On récupère le nombre de cellule
-	lseek(kv->fd_dkv,sizeof(int),SEEK_SET);//On se place au nombre de cellules
-	unsigned int nb = atoi(buffer)-1;//Nb cellule -1
-	sprintf(buffer,"%d",nb);
-	write(kv->fd_dkv,buffer,sizeof(len_t));
-	lseek(kv->fd_dkv,offset,SEEK_SET);//On se place à la fin de la cellule à supprimer
-
-	while( (n=read(kv->fd_dkv,buffer,1+2*sizeof(len_t))!=0) ) {//Tant qu'on lit
-		lseek(kv->fd_dkv,2*(-1-2*sizeof(len_t)),SEEK_CUR);//On se place à la cellule précédente
-		write(kv->fd_dkv,buffer,1+2*sizeof(len_t));//On écrit la cellule suivante lue
-		lseek(kv->fd_dkv,1+2*sizeof(len_t),SEEK_CUR);//On se place à la cellule d'après
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture nombre cellule
+	if (n==-1) {
+		perror("read");
+		return -1;
 	}
+	nb_cell=atoi(buffer);
 
-	free(buffer);
-	return 0;
-}
-/*A la fin de cette fonction, la dernière cellule est en double,
-C'est pour ça qu'on met le nombre de cellules dans l'en-tête.*/
-
-
-//L'offset correspond au début de la celulle à descendre
-//A l'offset donné, on écrira la nouvelle cellule
-int decale_bas(KV *kv, len_t offset) {
-	char *buffer = malloc(TAILLE_MAX);
-	unsigned int n, nb_cell,nb;
-	unsigned int off,i;
-	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
-	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On récupère le nombre de cellule
-	lseek(kv->fd_dkv,sizeof(int),SEEK_SET);//On se place au nombre de cellules
-	nb_cell  = atoi(buffer)+1;//Nb cellule +1
-	sprintf(buffer,"%d",nb_cell);
-	write(kv->fd_dkv,buffer,sizeof(len_t));//Ré-écriture de la nouvelle valeur
-	//Le pointeur est donc à la fin de l'entête, à la première cellule;
-
-	for(i=0;i<nb_cell-1;i++) {
-		lseek(kv->fd_dkv,1+2*sizeof(len_t),SEEK_CUR);//On bouge d'une cellule
-		off=lseek(kv->fd_dkv,0,SEEK_CUR);//Récupération de l'offset actel
-		nb++;
-		if (off==offset) {
+	while (j!=nb_cell) {//Boucle pour récupérer la première longueur d'une cell vide
+		n=read(kv->fd_dkv,buffer,1);//Lecture premier bit descripteur
+		if ( atoi(buffer)==0) {
+			n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture de la longueur de la case
+			lg = atoi(buffer);
+			off = lseek(kv->fd_dkv,0,SEEK_CUR);//On retient la position actuelle
 			break;
 		}
+		lseek(kv->fd_dkv,2*sizeof(len_t),SEEK_CUR);
+		j++;
 	}
-	//A la fin de la boucle, on est donc au début de la cellule à déplacer
-	//On a le nombre de cellules parcourues
-	nb = nb_cell-nb; //Nombre de cellules restantes
-	n=read(kv->fd_dkv,buffer,nb*(1+2*sizeof(len_t)));//On récupère toutes les cellules restantes
-	lseek(kv->fd_dkv,offset+(1+2*sizeof(len_t)),SEEK_SET);
-	write(kv->fd_dkv,buffer,nb*(1+2*sizeof(len_t)));
 
+	for(i=0;i<nb_cell;i++) {
+		n=read(kv->fd_dkv,buffer,1);//Lecture premier bit descripteur
+		if ( atoi(buffer)==0) {
+			n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture de la longueur de la case
+			if ( (unsigned int)atoi(buffer) > (unsigned int)(2*sizeof(len_t)+key->len+val->len) ){//Si longueur suffisante
+				if ( atoi(buffer)<lg) {//Si longueur plus petite que longueur actuelle en mém
+					lg = atoi(buffer);//
+					off = lseek(kv->fd_dkv,0,SEEK_CUR);//On retient la position actuelle
+				}
+			}
+		}
+		lseek(kv->fd_dkv,sizeof(len_t),SEEK_CUR);//On passe l'offset
+	}
+
+	lseek(kv->fd_dkv,off,SEEK_CUR);//On se replace à l'offset de la plus grand longueur
+	if ((unsigned int)lg < (2*sizeof(len_t)+val->len+key->len) )//Verification de la place
+		return 0;
+
+	n=read(kv->fd_dkv,buffer,sizeof(len_t));//On lit l'offset
+	off=atoi(buffer);
+	lseek(kv->fd_blk,offset,SEEK_SET);//On se place à l'offset donné en arg
+	sprintf(buffer,"%d",off);
+	write(kv->fd_blk,buffer,sizeof(len_t));//Ecriture de l'offset du kv dans blk
+	lseek(kv->fd_kv,off,SEEK_SET);//On se place dans le kv
+	sprintf(buffer,"%d",key->len);
+	write(kv->fd_kv,buffer,sizeof(len_t));//Ecriture longueur clé
+	write(kv->fd_kv,(char *)key->ptr,key->len);//Ecriture clé
+	sprintf(buffer,"%d",val->len);
+	write(kv->fd_kv,buffer,sizeof(len_t));//Ecriture longueur val
+	write(kv->fd_kv,(char *)val->ptr,val->len);//Ecriture val
+	off1 = lseek(kv->fd_kv,0,SEEK_CUR);//Récupérer l'adresse de la nouvelle future case au cas-où
+	//Le pointeur est donc à la fin de la "case"
+
+	if ( (unsigned int)lg >= (4*sizeof(len_t)+1+key->len+val->len) ) {
+		//Si taille suffisante pour nouvelle case
+		decale_bas(kv,off);//Faire la place pour la nouvelle case
+		lseek(kv->fd_dkv,off,SEEK_SET);//On se place au début de la nouvelle case
+		sprintf(buffer,"%d",0);
+		write(kv->fd_dkv,buffer,1);//Ecriture du bit d'emplacement libre
+		sprintf(buffer,"%ld",lg-(2*sizeof(len_t)-key->len-val->len));
+		write(kv->fd_dkv,buffer,sizeof(len_t));//Ecritue de la longueur restante
+		sprintf(buffer,"%d",off1);
+		write(kv->fd_dkv,buffer,sizeof(len_t));//Ecriture de l'offset
+	}
+
+	return 1;
 
 
 	return 0;
 }
+
+
+
+
 
 
 len_t hash_0(kv_datum *a){
@@ -587,6 +733,9 @@ void fusionne_cel(KV *kv) {
 	char *buffer = malloc(sizeof(len_t));
 	lseek(kv->fd_dkv,-1-2*sizeof(len_t),SEEK_CUR);
 	n=read(kv->fd_dkv,buffer,1);//Lecture bit descripteur au dessus
+	if (n==-1) {
+		perror("read");
+	}
 	if ( atoi(buffer)==0) {//Si cellule du dessus vide
 		n=read(kv->fd_dkv,buffer,sizeof(len_t));//Longueur cellule au dessus
 		lg = atoi(buffer);
