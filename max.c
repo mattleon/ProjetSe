@@ -123,7 +123,9 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		if(!S_ISREG(bufferfile.st_mode)){
 			if((fd1 = open(file, O_CREAT | O_WRONLY, 0600))==-1)
 				return NULL;
-			if(write(fd1, "10", sizeof(len_t))==-1)
+			if(write(fd1, "1", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd1, "0", sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd1)==-1)
 				return NULL;
@@ -132,7 +134,15 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 			snprintf(file, PATH_MAX, "%s%s", dbname, extend);
 			if((fd2 = open(file, O_CREAT | O_WRONLY, 0600))==-1)
 				return NULL;
-			if(write(fd2, "21", sizeof(len_t))==-1)
+			if(write(fd2, "2", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd2, "1", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd2, "0", 1)==-1)
+				return NULL;
+			if(write(fd2, "4294967296", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd2, "4", sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd2)==-1)
 				return NULL;
@@ -246,7 +256,9 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		if(!S_ISREG(bufferfile.st_mode)){
 			if((fd1 = open(file, O_CREAT | O_WRONLY, 0600))==-1)
 				return NULL;
-			if(write(fd1, "10", sizeof(len_t))==-1)
+			if(write(fd1, "1", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd1, "0", sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd1)==-1)
 				return NULL;
@@ -255,7 +267,15 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 			snprintf(file,PATH_MAX,"%s%s",dbname,extend);
 			if((fd2 = open(file, O_CREAT | O_WRONLY, 0600))==-1)
 				return NULL;
-			if(write(fd2, "21", sizeof(len_t))==-1)
+			if(write(fd2, "2", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd2, "1", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd2, "0", 1)==-1)
+				return NULL;
+			if(write(fd2, "4294967296", sizeof(len_t))==-1)
+				return NULL;
+			if(write(fd2, "4", sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd2)==-1)
 				return NULL;
@@ -287,7 +307,9 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		snprintf(file, PATH_MAX, "%s%s", dbname, extend);
 		if((fd1 = open(file, O_TRUNC | O_RDWR))==-1)
 			return NULL;
-		if(write(fd1, "10", sizeof(len_t))==-1)
+		if(write(fd1, "1", sizeof(len_t))==-1)
+			return NULL;
+		if(write(fd1, "0", sizeof(len_t))==-1)
 			return NULL;
 		if(read(fd1, "1", sizeof(len_t))==-1)
 			return NULL;
@@ -297,7 +319,15 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		snprintf(file, PATH_MAX, "%s%s", dbname, extend);
 		if((fd2 = open(file, O_TRUNC | O_RDWR))==-1)
 			return NULL;
-		if(write(fd2, "21", sizeof(len_t))==-1)
+		if(write(fd2, "2", sizeof(len_t))==-1)
+			return NULL;
+		if(write(fd2, "1", sizeof(len_t))==-1)
+			return NULL;
+		if(write(fd2, "0", 1)==-1)
+			return NULL;
+		if(write(fd2, "4294967296", sizeof(len_t))==-1)
+			return NULL;
+		if(write(fd2, "4", sizeof(len_t))==-1)
 			return NULL;
 		if(read(fd2, "2", sizeof(len_t))==-1)
 			return NULL;
