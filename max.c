@@ -65,9 +65,10 @@ typedef struct kv_datum kv_datum ;
 KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 	KV *new = malloc(sizeof(KV));
 	new->alloc = alloc;
+	len_t var;
 	char *extend = malloc(TAILLE_MIN);
 	char *file = malloc(TAILLE_MIN);
-	int fd1, fd2, fd3, fd4;
+	int fd1, fd2, fd3, fd4;				
 	new->hash=hidx;
 	struct stat bufferfile;
 	char * buff=malloc(sizeof(int));
@@ -86,7 +87,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		if((fd1 = open(file, O_RDONLY))==-1)
 			return NULL;
 		lseek(fd1, 0, SEEK_SET);
-		if((read(fd1, buff, 1))==-1)
+		if(read(fd1, buff, 1)==-1)
 			return NULL;
 		if(atoi(buff)!=1)
 			return NULL;
@@ -97,7 +98,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		if((fd2 = open(file, O_RDONLY))==-1)
 			return NULL;
 		lseek(fd2, 0, SEEK_SET);
-		if((read(fd2, buff, 1))==-1)
+		if(read(fd2, buff, 1)==-1)
 			return NULL;
 		if(atoi(buff)!=2)
 			return NULL;
@@ -108,7 +109,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		if((fd3 = open(file, O_RDONLY))==-1)
 			return NULL;
 		lseek(fd3, 0, SEEK_SET);
-		if((read(fd3, buff, 1))==-1)
+		if(read(fd3, buff, 1)==-1)
 			return NULL;
 		if(atoi(buff)!=3)
 			return NULL;
@@ -119,7 +120,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		if((fd4 = open(file, O_RDONLY))==-1)
 			return NULL;
 		lseek(fd4, 0, SEEK_SET);
-		if((read(fd4, buff, 1))==-1)
+		if(read(fd4, buff, 1)==-1)
 			return NULL;
 		if(atoi(buff)!=4)
 			return NULL;
@@ -137,8 +138,8 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 				return NULL;
 			if(write(fd1, "1", 1)==-1)
 				return NULL;
-			sprintf(buff, "%d", 0);
-			if(write(fd1, buff, sizeof(len_t))==-1)
+			var = 0;
+			if(write(fd1, &var, sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd1)==-1)
 				return NULL;
@@ -149,16 +150,16 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 				return NULL;
 			if(write(fd2, "2", 1)==-1)
 				return NULL;
-			sprintf(buff, "%d", 1);
-			if(write(fd2, buff, sizeof(len_t))==-1)
+			var = 1;
+			if(write(fd2, &var, sizeof(len_t))==-1)
 				return NULL;
 			if(write(fd2, "0", 1)==-1)
 				return NULL;
-			sprintf(buff, "%lld", 4294967296);
-			if(write(fd2, buff, sizeof(len_t))==-1)
+			var = 4294967296-1;
+			if(write(fd2, &var, sizeof(len_t))==-1)
 				return NULL;
-			sprintf(buff, "%d", 4);
-			if(write(fd2, buff, sizeof(len_t))==-1)
+			var = 4;
+			if(write(fd2, &var, sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd2)==-1)
 				return NULL;
@@ -178,8 +179,8 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 				return NULL;
 			if(write(fd4, "4", 1)==-1)
 				return NULL;
-			sprintf(buff, "%d", hidx);
-			if(write(fd4, buff, 1)==-1)
+			var = hidx;
+			if(write(fd4, &var, 1)==-1)
 				return NULL;
 			if(close(fd4)==-1)
 				return NULL;
@@ -297,8 +298,8 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 				return NULL;
 			if(write(fd1, "1", 1)==-1)
 				return NULL;
-			sprintf(buff, "%d", 0);
-			if(write(fd1, buff, sizeof(len_t))==-1)
+			var=0;
+			if(write(fd1, &var, sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd1)==-1)
 				return NULL;
@@ -309,16 +310,16 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 				return NULL;
 			if(write(fd2, "2", 1)==-1)
 				return NULL;
-			sprintf(buff, "%d", 1);
-			if(write(fd2, buff, sizeof(len_t))==-1)
+			len_t var=1;
+			if(write(fd2, &var, sizeof(len_t))==-1)
 				return NULL;
 			if(write(fd2, "0", 1)==-1)
 				return NULL;
-			sprintf(buff, "%lld", 4294967296);
-			if(write(fd2, buff, sizeof(len_t))==-1)
+			var= 4294967296-1;
+			if(write(fd2, &var, sizeof(len_t))==-1)
 				return NULL;
-			sprintf(buff, "%d", 4);
-			if(write(fd2, buff, sizeof(len_t))==-1)
+			var=4;
+			if(write(fd2, &var, sizeof(len_t))==-1)
 				return NULL;
 			if(close(fd2)==-1)
 				return NULL;
@@ -338,8 +339,8 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 				return NULL;
 			if(write(fd4, "4", 1)==-1)
 				return NULL;
-			sprintf(buff, "%d", hidx);
-			if(write(fd4, buff, 1)==-1)
+			var= hidx;
+			if(write(fd4, &var, 1)==-1)
 				return NULL;
 			if(close(fd4)==-1)
 				return NULL;
@@ -351,11 +352,13 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 			return NULL;
 		if(write(fd1, "1", 1)==-1)
 			return NULL;
-		sprintf(buff, "%d", 0);
-		if(write(fd1, buff, sizeof(len_t))==-1)
+		var= 0;
+		if(write(fd1, &var, sizeof(len_t))==-1)
 			return NULL;
 		lseek(fd1, 0, SEEK_SET);
-		if(read(fd1, "1", sizeof(len_t))==-1)
+		if(read(fd1, buff, 1)==-1)
+			return NULL;
+		if(atoi(buff)!=1)
 			return NULL;
 		new->fd_blk = fd1;
 
@@ -365,19 +368,21 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 			return NULL;
 		if(write(fd2, "2", 1)==-1)
 			return NULL;
-		sprintf(buff, "%d", 1);
-		if(write(fd2, buff, sizeof(len_t))==-1)
+		var=1;
+		if(write(fd2, &var, sizeof(len_t))==-1)
 			return NULL;
 		if(write(fd2, "0", 1)==-1)
 			return NULL;
-		sprintf(buff, "%lld", 4294967296);
-		if(write(fd2, buff, sizeof(len_t))==-1)
+		var= 4294967296-1;
+		if(write(fd2, &var, sizeof(len_t))==-1)
 			return NULL;
-		sprintf(buff, "%d", 4);
-		if(write(fd2, buff, sizeof(len_t))==-1)
+		var=4;
+		if(write(fd2, &var, sizeof(len_t))==-1)
 			return NULL;
 		lseek(fd2, 0, SEEK_SET);
-		if(read(fd2, "2", sizeof(len_t))==-1)
+		if(read(fd2, buff, 1)==-1)
+			return NULL;
+		if(atoi(buff)!=2)
 			return NULL;
 		new->fd_dkv = fd2;
 
@@ -388,7 +393,9 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		if(write(fd3, "3", 1)==-1)
 			return NULL;
 		lseek(fd3, 0, SEEK_SET);
-		if(read(fd3, "3", 1)==-1)
+		if(read(fd3, buff, 1)==-1)
+			return NULL;
+		if(atoi(buff)!=3)
 			return NULL;
 		new->fd_kv= fd3;
 
@@ -398,11 +405,13 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 			return NULL;
 		if(write(fd4, "4", 1)==-1)
 			return NULL;
-		sprintf(buff, "%d", hidx);
-		if(write(fd4, buff, 1)==-1)
+		var=hidx;
+		if(write(fd4, &var, 1)==-1)
 			return NULL;
 		lseek(fd4, 0, SEEK_SET);
-		if(read(fd4, "4", 1)==-1)
+		if(read(fd4, buff, 1)==-1)
+			return NULL;
+		if(atoi(buff)!=4)
 			return NULL;
 		new->fd_h = fd4;
 	}
