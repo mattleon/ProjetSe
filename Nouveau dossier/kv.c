@@ -1,4 +1,4 @@
-#include "kv.h"
+//#include "kv.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -12,9 +12,48 @@
 #define TAILLE_MIN 1024
 #define TAILLE_MAX 4096
 #define head_h 2
-#define head_blk 1
+#define head_blk 5
 #define head_kv 1
-#define head_dkv 1
+#define head_dkv 5
+
+typedef enum { FIRST_FIT, WORST_FIT, BEST_FIT } alloc_t ;
+
+typedef struct KV {
+ int fd_h;
+ int fd_kv;
+ int fd_blk;
+ int fd_dkv;
+ alloc_t alloc;
+ int hash;
+} KV ;
+
+
+typedef struct BLK {
+ int numBlk; //Numéro du bloc
+ int nbrEnt; //Max 1020
+ int numExBlk; //Existence d'un bloc suivant ou non (0 si n'existe pas)
+ int nextBlk; //Num du prochain bloc (0 si n'existe pas)
+} BLK;
+
+/*
+* Avec des longueurs sur 32 bits, on peut aller jusqu'à 4 Go
+*/
+
+typedef uint32_t len_t ;
+
+/*
+* Représente une donnée : soit une clef, soit une valeur
+*/
+
+struct kv_datum
+{
+   void  *ptr ;		/* la donnée elle-même */
+   len_t len ;			/* sa taille */
+} ;
+
+typedef struct kv_datum kv_datum ;
+
+
 
 /* Structure blk du .blk :
  * En-tête contient quatre infos :
@@ -296,7 +335,6 @@ len_t hash_0(kv_datum *a){
  	unsigned int i;
  	for(i=0; i<a->len; i++)
  		sum+=((char*)a->ptr)[i];
- 	printf("sum1 %d\n", sum%999983);
  	return sum%999983;
 }
 
@@ -305,7 +343,6 @@ len_t hash_1(kv_datum *a){
  	unsigned int i=0;
  	for(i=0; i<a->len; i++)
  		sum+=sum+((char*)a->ptr)[i];
- 	printf("sum2 %d\n", sum%4096);
  	return sum%4096;
 }
 
@@ -314,7 +351,6 @@ len_t hash_2(kv_datum *a){
  	unsigned int i=0;
  	for(i=0; i<a->len; i++)
  		sum+=(sum+i+1)*((char*)a->ptr)[i];
- 	printf("sum2 %d\n", sum%4096);
  	return sum%4096;
 }
 
@@ -1165,5 +1201,17 @@ int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 }
 
 int main() {
+  KV *kv = kv_open("test", "r+",1, 0);
+  kv_datum *key = malloc(sizeof(kv_datum));
+  kv_datum *val = malloc(sizeof(kv_datum));
+  key->len = 4;
+  key->ptr = "test";
+  val->len = 4;
+  val->ptr = "1234";
+  kv_put(kv,key,val);
+  free(key);
+  free(val);
+  kv_close(kv);
+  free(kv);
   return 0;
 }

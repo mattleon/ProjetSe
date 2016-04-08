@@ -1,88 +1,63 @@
-BEST_FIT	kv.c	16
-BEST_FIT	kv.h	40
-BEST_FIT	mat.c	20
+BEST_FIT	kv.h	15
+BLK	kv.h	27
+BLK	kv.h	32
 BLOCKSIZE	put.c	40
-FIRST_FIT	kv.c	16
-FIRST_FIT	kv.h	40
-FIRST_FIT	mat.c	20
-KV	kv.c	19
-KV	kv.c	25
-KV	kv.h	10
-KV	kv.h	16
-KV	mat.c	22
-KV	mat.c	28
+FIRST_FIT	kv.h	15
+KV	kv.h	17
+KV	kv.h	24
 Mdel	del.c	/^int main (int argc, char *argv [])$/
 Mget	get.c	/^int main (int argc, char *argv [])$/
-Mkv	kv.c	/^int main(int argc, char const *argv[]) {$/
-Mmat	mat.c	/^int main(int argc, char const *argv[]) {$/
 Mput	put.c	/^int main (int argc, char *argv [])$/
-TAILLE_MAX	kv.c	14
-TAILLE_MAX	mat.c	13
-TAILLE_MAX	maxime.c	9
-TAILLE_MIN	kv.c	13
-TAILLE_MIN	mat.c	12
-WORST_FIT	kv.c	16
-WORST_FIT	kv.h	40
-WORST_FIT	mat.c	20
-alloc	kv.c	24
-alloc	kv.h	15
-alloc	mat.c	27
-alloc_t	kv.c	16
-alloc_t	kv.h	40
-alloc_t	mat.c	20
+TAILLE_MAX	kv.c	13
+TAILLE_MIN	kv.c	12
+WORST_FIT	kv.h	15
+alloc	kv.h	22
+alloc_t	kv.h	15
 allocation	put.c	/^alloc_t allocation (const char *alloc)$/
-fd_blk	kv.c	22
-fd_blk	kv.h	13
-fd_blk	mat.c	25
-fd_dkv	kv.c	23
-fd_dkv	kv.h	14
-fd_dkv	mat.c	26
-fd_h	kv.c	20
-fd_h	kv.h	11
-fd_h	mat.c	23
-fd_kv	kv.c	21
-fd_kv	kv.h	12
-fd_kv	mat.c	24
-head_blk	mat.c	15
-head_dkv	mat.c	17
-head_h	mat.c	14
-head_kv	mat.c	16
+best_fit	kv.c	/^len_t best_fit(KV *kv, const kv_datum *key, const /
+decale_bas	kv.c	/^ int decale_bas(KV *kv, len_t offset) {$/
+decale_blk	kv.c	/^int decale_blk(KV *kv, BLK *blk, int offset) {$/
+decale_haut	kv.c	/^ int decale_haut(KV *kv, len_t offset) {$/
+del	kv.c	/^int del(KV *kv, BLK *blk,const kv_datum *key) {$/
+fd_blk	kv.h	20
+fd_dkv	kv.h	21
+fd_h	kv.h	18
+fd_kv	kv.h	19
+first_fit	kv.c	/^len_t first_fit(KV *kv, const kv_datum *key, const/
+fusionne_cel	kv.c	/^void fusionne_cel(KV *kv) {$/
+hash	kv.h	23
+hash_0	kv.c	/^len_t hash_0(kv_datum *a){$/
+hash_1	kv.c	/^len_t hash_1(kv_datum *a){$/
+hash_2	kv.c	/^len_t hash_2(kv_datum *a){$/
+head_blk	kv.c	15
+head_dkv	kv.c	17
+head_h	kv.c	14
+head_kv	kv.c	16
 help_string	del.c	18
 help_string	get.c	17
 help_string	put.c	18
 kv_close	kv.c	/^int kv_close (KV *kv) {$/
-kv_close	mat.c	/^int kv_close (KV *kv) {$/
-kv_close	maxime.c	/^int kv_close (KV *kv){$/
-kv_datum	kv.c	37
-kv_datum	kv.c	43
-kv_datum	kv.h	28
-kv_datum	kv.h	34
-kv_datum	mat.c	40
-kv_datum	mat.c	46
+kv_datum	kv.h	44
+kv_datum	kv.h	50
 kv_del	kv.c	/^int kv_del (KV *kv, const kv_datum *key) {$/
 kv_get	kv.c	/^int kv_get (KV *kv, const kv_datum *key, kv_datum /
-kv_get	mat.c	/^int kv_get (KV *kv, const kv_datum *key, kv_datum /
 kv_next	kv.c	/^int kv_next (KV *kv, kv_datum *key, kv_datum *val)/
 kv_open	kv.c	/^KV *kv_open (const char *dbname, const char *mode,/
-kv_open	mat.c	/^KV *kv_open (const char *dbname, const char *mode,/
-kv_open	maxime.c	/^KV *kv_open (const char *dbname, const char *mode,/
 kv_put	kv.c	/^int kv_put (KV *kv, const kv_datum *key, const kv_/
 kv_start	kv.c	/^void kv_start (KV *kv) {$/
-kv_start	mat.c	/^void kv_start (KV *kv) {$/
-len	kv.c	40
-len	kv.h	31
-len	mat.c	43
-len_t	kv.c	31
-len_t	kv.h	22
-len_t	mat.c	34
+len	kv.h	47
+len_t	kv.h	38
 lire_val	put.c	/^void lire_val (kv_datum *val)$/
+nbrEnt	kv.h	29
+nextBlk	kv.h	31
+numBlk	kv.h	28
+numExBlk	kv.h	30
 print_all	get.c	/^void print_all (KV *kv, int quiet)$/
 print_one	get.c	/^void print_one (kv_datum *key, kv_datum *val)$/
-ptr	kv.c	39
-ptr	kv.h	30
-ptr	mat.c	42
+ptr	kv.h	46
 raler	common.c	/^void raler (KV *kv, const char *msg)$/
 usage	common.c	/^void usage (const char *argv0, int exitcode)$/
 usage_string	del.c	16
 usage_string	get.c	15
 usage_string	put.c	16
+worst_fit	kv.c	/^len_t worst_fit(KV *kv, const kv_datum *key, const/

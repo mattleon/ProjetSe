@@ -1,0 +1,11 @@
++ rm -f test-100-4299-db.*
++ get test-100-4299-db ma-clef
+test-100.sh: 29: test-100.sh: get: not found
++ put test-100-4299-db ma-clef abc
+test-100.sh: 32: test-100.sh: put: not found
++ fail put ma-clef 1
++ echo ==> Échec du test 'test-100-4299' sur 'put ma-clef 1'.
++ echo ==> Log : 'test-100-4299.log'.
++ echo ==> DB : 'test-100-4299-db'.
++ echo ==> Exit
++ exit 1
