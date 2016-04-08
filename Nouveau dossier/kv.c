@@ -201,16 +201,18 @@ len_t worst_fit(KV *kv, const kv_datum *key, const kv_datum *val, len_t offset) 
 	char *buffer = malloc(TAILLE_MIN);
 	int n,i,nb_cell,off,off1;
 	int lg=0;
-	lseek(kv->fd_dkv,sizeof(len_t),SEEK_SET);
-	n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture nombre cellule
+	lseek(kv->fd_dkv,1,SEEK_SET);
+  int temp;
+	n=read(kv->fd_dkv,&temp,sizeof(len_t));//Lecture nombre cellule
+  printf("%d\n",temp);
 	if (n==-1) {
 		perror("read");
 		return -1;
 	}
 	nb_cell=atoi(buffer);
-
+  printf("%d\n",nb_cell);
 	for(i=0;i<nb_cell;i++) {
-		n=read(kv->fd_dkv,buffer,1);//Lecture prmeier bit descripteur
+		n=read(kv->fd_dkv,buffer,1);//Lecture premier bit descripteur
 		if ( atoi(buffer)==0) {
 			n=read(kv->fd_dkv,buffer,sizeof(len_t));//Lecture de la longueur de la case
 			if ( lg > atoi(buffer) ){
@@ -330,27 +332,30 @@ len_t best_fit(KV *kv, const kv_datum *key, const kv_datum *val, len_t offset) {
 	return 0;
 }
 
-len_t hash_0(kv_datum *a){
+len_t hash_0(const kv_datum *a){
  	unsigned int sum=0;
  	unsigned int i;
  	for(i=0; i<a->len; i++)
- 		sum+=((char*)a->ptr)[i];
+ 		sum=((char*)a->ptr)[i];
  	return sum%999983;
 }
 
-len_t hash_1(kv_datum *a){
+len_t hash_1(const kv_datum *a){
  	unsigned int sum=0;
  	unsigned int i=0;
+  char *str = (char *)a->ptr;
+  printf("test1\n");
  	for(i=0; i<a->len; i++)
- 		sum+=sum+((char*)a->ptr)[i];
+ 		sum=sum+str[i];
+  printf("test2\n");
  	return sum%4096;
 }
 
-len_t hash_2(kv_datum *a){
+len_t hash_2(const kv_datum *a){
  	unsigned int sum=0;
  	unsigned int i=0;
  	for(i=0; i<a->len; i++)
- 		sum+=(sum+i+1)*((char*)a->ptr)[i];
+ 		sum=(sum+i+1)*((char*)a->ptr)[i];
  	return sum%4096;
 }
 
@@ -362,8 +367,9 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 	char *file = malloc(TAILLE_MIN);
 	int fd1, fd2, fd3, fd4;
 	new->hash=hidx;
+  printf("%d\n%d\n",hidx,new->hash);
 	struct stat bufferfile;
-	char * buff=malloc(sizeof(int));
+	char * buff=malloc(TAILLE_MIN);
 	if ( (strcmp(mode,"r"))==0 ) {
 
 		extend = ".blk";
@@ -381,7 +387,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		lseek(fd1, 0, SEEK_SET);
 		if(read(fd1, buff, 1)==-1)
 			return NULL;
-		if(atoi(buff)!=1)
+		if(buff[0]!=1)
 			return NULL;
 		new->fd_blk = fd1;
 
@@ -392,7 +398,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		lseek(fd2, 0, SEEK_SET);
 		if(read(fd2, buff, 1)==-1)
 			return NULL;
-		if(atoi(buff)!=2)
+		if(buff[0]!=2)
 			return NULL;
 		new->fd_dkv = fd2;
 
@@ -403,7 +409,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		lseek(fd3, 0, SEEK_SET);
 		if(read(fd3, buff, 1)==-1)
 			return NULL;
-		if(atoi(buff)!=3)
+		if(buff[0]!=3)
 			return NULL;
 		new->fd_kv= fd3;
 
@@ -414,7 +420,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 		lseek(fd4, 0, SEEK_SET);
 		if(read(fd4, buff, 1)==-1)
 			return NULL;
-		if(atoi(buff)!=4)
+		if(buff[0]!=4)
 			return NULL;
 		new->fd_h = fd4;
 	}
@@ -471,8 +477,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 				return NULL;
 			if(write(fd4, "4", 1)==-1)
 				return NULL;
-			var = hidx;
-			if(write(fd4, &var, 1)==-1)
+			if(write(fd4, &hidx, 1)==-1)
 				return NULL;
 			if(close(fd4)==-1)
 				return NULL;
@@ -811,46 +816,93 @@ int kv_get (KV *kv, const kv_datum *key, kv_datum *val) {
  */
 int kv_put (KV *kv, const kv_datum *key, const kv_datum *val) {
 
-	int tmp,n,offset,i,lg,pos;
+	int n,offset,tmp1;
+  len_t tmp;
 	char *buffer = malloc(sizeof(len_t));
 	char *bufNum = malloc(TAILLE_MAX);
 	BLK *blk = malloc(sizeof(BLK));
-	char *null = "0000";
 	switch (kv->hash) {
-		case 0: tmp = hash_0(key->ptr);
+		case 0: tmp = hash_0(key);
 						break;
 
-		case 1:tmp = hash_1(key->ptr);
+		case 1: tmp = hash_1(key);
 						break;
 
-		case 2:tmp = hash_2(key->ptr);
+		case 2: tmp = hash_2(key);
 						break;
 
 		default : break;
 	}
 
 	lseek(kv->fd_h,head_h+tmp*sizeof(len_t),SEEK_SET);
+  //On se met à la position correspondant à la position de l'offset
+  //de la clé hachée
+
 	n=read(kv->fd_h,buffer,sizeof(len_t));//lecture offset
 	if (n==0) {//Si pas d'offset présent
-		lseek(kv->fd_h,head_h+tmp*sizeof(len_t),SEEK_SET);//Positionnement au futur offsets
-		lseek(kv->fd_blk,sizeof(len_t),SEEK_SET);
-		n=read(kv->fd_h,buffer,sizeof(len_t));//Lecure nbr blocs
-		lseek(kv->fd_blk,-sizeof(len_t),SEEK_CUR);
-		sprintf(buffer,"%d",atoi(buffer)+1);
-		write(kv->fd_blk,buffer,sizeof(len_t));//Ecriture nombre de blocs +1
-		offset = lseek(kv->fd_blk,head_blk + atoi(buffer)*4096,SEEK_SET);//Placement au nouveau blocs
+		lseek(kv->fd_h,-sizeof(len_t),SEEK_SET);//retour à la position précédente
+		lseek(kv->fd_blk,sizeof(len_t),SEEK_SET);//Position au nbr de blocs
+		n=read(kv->fd_blk,buffer,sizeof(len_t));//Lecure nbr blocs
+		lseek(kv->fd_blk,-sizeof(len_t),SEEK_CUR);//Retour en arrière
+    int nbBloc = atoi(buffer) +1;
+		write(kv->fd_blk,&nbBloc,sizeof(len_t));//Ecriture nombre de blocs +1
+		offset = lseek(kv->fd_blk,head_blk + (nbBloc-1)*4096,SEEK_SET);
+    //Placement au nouveau bloc avec -1 pour ne pas avoir un trou de 4096
+    //Car nb trou commence à 1
 
-		sprintf(buffer,"%d",atoi(buffer));
-		write(kv->fd_h,buffer,sizeof(len_t));//Ecriture numéro blocs
-		sprintf(buffer,"%d",1);
-		write(kv->fd_h,buffer,sizeof(len_t));//Ecriture nombre entrée
-		sprintf(buffer,"%d",0);
-		write(kv->fd_h,buffer,sizeof(len_t));//Ecriture ex bloc suivant
-		sprintf(buffer,"%d",0);
-		write(kv->fd_h,buffer,sizeof(len_t));//Ecriture num bloc suivant
+
+		write(kv->fd_blk,&nbBloc,sizeof(len_t));//Ecriture numéro blocs
+		tmp1 = 1;
+		write(kv->fd_blk,&tmp1,sizeof(len_t));//Ecriture nombre entrée
+		tmp1 = 0;
+		write(kv->fd_blk,&tmp1,sizeof(len_t));//Ecriture ex bloc suivant
+		tmp1 = 0;
+		write(kv->fd_blk,&tmp1,sizeof(len_t));//Ecriture num bloc suivant
+    //On est maintenant au début du bloc
 		offset = lseek(kv->fd_blk,0,SEEK_CUR);
 
-		switch(kv->alloc) {
+		switch(kv->alloc) {//En fonction de la fonction d'alloc
+			case FIRST_FIT: first_fit(kv,key,val,offset);
+											break;
+
+			case WORST_FIT: worst_fit(kv,key,val,offset);
+											break;
+
+			case BEST_FIT: best_fit(kv,key,val,offset);
+											break;
+
+			default: break;
+		}
+
+	}
+	else {//Si entrée dans .h, on suppose que le bloc dans blk est existant.
+		offset = atoi(buffer);
+		lseek(kv->fd_blk,offset,SEEK_SET);
+		n=read(kv->fd_blk,bufNum,sizeof(len_t)); //On lit le num du bloc
+		blk->numBlk = atoi(bufNum);
+		n=read(kv->fd_blk,bufNum,sizeof(len_t)); //nbr d'entrée
+		blk->nbrEnt = atoi(bufNum);
+		n=read(kv->fd_blk,bufNum,sizeof(len_t)); //existence bloc suivant
+		blk->numExBlk = atoi(bufNum);
+		n=read(kv->fd_blk,bufNum,sizeof(len_t)); //num bloc suivant (0 par défaut)
+		blk->nextBlk = atoi(bufNum);
+
+		while (blk->numExBlk!=0) {//Parcours de tous les blocs correspondant à la clé
+			lseek(kv->fd_blk,head_blk + 4096*(blk->nextBlk-1),SEEK_SET);//On se place au bloc suivant
+      n=read(kv->fd_blk,bufNum,sizeof(len_t)); //On lit le num du bloc
+  		blk->numBlk = atoi(bufNum);
+  		n=read(kv->fd_blk,bufNum,sizeof(len_t)); //nbr d'entrée
+  		blk->nbrEnt = atoi(bufNum);
+  		n=read(kv->fd_blk,bufNum,sizeof(len_t)); //existence bloc suivant
+  		blk->numExBlk = atoi(bufNum);
+  		n=read(kv->fd_blk,bufNum,sizeof(len_t)); //num bloc suivant (0 par défaut)
+  		blk->nextBlk = atoi(bufNum);
+		}
+    //On est ici au dernier bloc de la clé hachée, si tout va bien
+
+    offset = lseek(kv->fd_blk,0,SEEK_CUR);
+    //On se met à l'offset correspondant à la nouvelle entrée à écriture
+    switch(kv->alloc) {//En fonction de la fonction d'alloc
 			case FIRST_FIT: first_fit(kv,key,val,offset);
 											break;
 
@@ -863,71 +915,7 @@ int kv_put (KV *kv, const kv_datum *key, const kv_datum *val) {
 			default: break;
 		}
 
-	}
-	else {
-		offset = atoi(buffer);
-		lseek(kv->fd_blk,offset,SEEK_SET);
-		n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
-		blk->numBlk = atoi(bufNum);
-		n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
-		blk->nbrEnt = atoi(bufNum);
-		n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
-		blk->numExBlk = atoi(bufNum);
-		n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
-		blk->nextBlk = atoi(bufNum);
-
-		while (blk->numExBlk!=0) {//Parcours de tous les blocs correspondant à la clé
-			for(i=0;i<blk->nbrEnt;i++) {//Parcours de tous les offsets du bloc
-				n=read(kv->fd_blk,bufNum,sizeof(len_t));//Lecture de l'offset
-				if (strcmp(bufNum,null))
-					pos = lseek(kv->fd_blk,0,SEEK_CUR);
-
-				lseek(kv->fd_kv,atoi(bufNum),SEEK_SET);//On se place à l'offset dans .kv
-				n=read(kv->fd_blk,bufNum,sizeof(int));//On lit la longueur de la clé
-				lg = atoi(bufNum);
-				n=read(kv->fd_blk,bufNum,lg);//On lit la clé
-				if ( strcmp(bufNum,(char *)key->ptr)==0 ) {//Si les deux clés sont identiques
-					n=read(kv->fd_blk,bufNum,sizeof(int));//On lit la longeur de la valeur
-					lg = atoi(bufNum);
-					write(kv->fd_kv,(char *)val->ptr,val->len);//On remplace la valeur
-					return 1;//En cas de réussite
-				}
-			}
-
-			lseek(kv->fd_blk,head_blk + blk->nextBlk*4096,SEEK_SET);
-			n=read(kv->fd_blk,bufNum,sizeof(int)); //On lit le num du bloc
-			blk->numBlk = atoi(bufNum);
-			n=read(kv->fd_blk,bufNum,sizeof(int)); //nbr d'entrée
-			blk->nbrEnt = atoi(bufNum);
-			n=read(kv->fd_blk,bufNum,sizeof(int)); //existence bloc suivant
-			blk->numExBlk = atoi(bufNum);
-			n=read(kv->fd_blk,bufNum,sizeof(int)); //num bloc suivant (0 par défaut)
-			blk->nextBlk = atoi(bufNum);
-		}
-		/* Si on est ici, alors la clé n'est pas encore dans la base
-		 * mais sa valeur de hachage existe déjà, pas besoin de créer
-		 * un bloc dans ce cas.
-		 * On va alors se placer au premier offset nul trouvé dans les blocs,
-		 * correspondant à l'offset pos.
-		 */
-
-		 /* Pos contient la position du curseur situé juste après le premier offset
-		  * nul trouvé pendant la vérification des clés.
-			*/
-		 lseek(kv->fd_blk,pos-sizeof(len_t),SEEK_SET);
-		 /* Il faut maintenant récupérer un offset libre dans le fichier .kv
-		 en passant par le fichier .dkv.
-		 utiliser les fonctions d'allocations worst/best.first fit.
-		 */
-
-
-
-
-	}
-
-
-
-
+  }
 	return 0;
 }
 
@@ -1076,13 +1064,13 @@ int kv_del (KV *kv, const kv_datum *key) {
 	BLK *blk = malloc(sizeof(BLK));
 
 	switch (kv->hash) {
-		case 0: tmp = hash_0(key->ptr);
+		case 0: tmp = hash_0(key);
 						break;
 
-		case 1:tmp = hash_1(key->ptr);
+		case 1:tmp = hash_1(key);
 						break;
 
-		case 2:tmp = hash_2(key->ptr);
+		case 2:tmp = hash_2(key);
 						break;
 
 		default : break;
@@ -1201,14 +1189,18 @@ int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 }
 
 int main() {
-  KV *kv = kv_open("test", "r+",1, 0);
+  KV *kv = kv_open("test", "r+",0, 1);
   kv_datum *key = malloc(sizeof(kv_datum));
   kv_datum *val = malloc(sizeof(kv_datum));
   key->len = 4;
   key->ptr = "test";
   val->len = 4;
   val->ptr = "1234";
-  kv_put(kv,key,val);
+  char buffer[10];
+  lseek(kv->fd_dkv,1,SEEK_SET);
+  read(kv->fd_dkv,buffer,sizeof(len_t));
+  printf("%s\n",buffer);
+  //kv_put(kv,key,val);
   free(key);
   free(val);
   kv_close(kv);
