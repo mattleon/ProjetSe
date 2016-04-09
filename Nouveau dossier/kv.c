@@ -503,7 +503,7 @@ KV *kv_open (const char *dbname, const char *mode, int hidx, alloc_t alloc){
 			return NULL;
 		if(atoi(buff)!=2)
 			return NULL;
-		new->fd_blk = fd2;
+		new->fd_dkv = fd2;
 
 		extend = ".kv";
 		snprintf(file,PATH_MAX,"%s%s",dbname,extend);
@@ -1189,21 +1189,21 @@ int kv_next (KV *kv, kv_datum *key, kv_datum *val) {
 }
 
 int main() {
-  KV *kv = kv_open("test", "r+",0, 1);
+  KV *kv = kv_open("test", "r+", 0, 1);
   kv_datum *key = malloc(sizeof(kv_datum));
   kv_datum *val = malloc(sizeof(kv_datum));
   key->len = 4;
   key->ptr = "test";
   val->len = 4;
   val->ptr = "1234";
-  char buffer[10];
+  char* buffer=malloc(TAILLE_MIN);
   lseek(kv->fd_dkv,1,SEEK_SET);
   read(kv->fd_dkv,buffer,sizeof(len_t));
   printf("%s\n",buffer);
-  //kv_put(kv,key,val);
+  /*kv_put(kv,key,val);
   free(key);
   free(val);
   kv_close(kv);
-  free(kv);
+  free(kv);*/
   return 0;
 }
